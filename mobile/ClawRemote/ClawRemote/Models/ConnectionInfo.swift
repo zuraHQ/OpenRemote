@@ -3,6 +3,27 @@ import Foundation
 struct ConnectionInfo: Codable {
     let url: String
     let token: String
+    
+    // Save to UserDefaults
+    func save() {
+        if let data = try? JSONEncoder().encode(self) {
+            UserDefaults.standard.set(data, forKey: "savedConnection")
+        }
+    }
+    
+    // Load from UserDefaults
+    static func load() -> ConnectionInfo? {
+        guard let data = UserDefaults.standard.data(forKey: "savedConnection"),
+              let info = try? JSONDecoder().decode(ConnectionInfo.self, from: data) else {
+            return nil
+        }
+        return info
+    }
+    
+    // Clear saved connection
+    static func clear() {
+        UserDefaults.standard.removeObject(forKey: "savedConnection")
+    }
 }
 
 enum ConnectionState: Equatable {

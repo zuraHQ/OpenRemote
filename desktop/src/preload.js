@@ -14,4 +14,7 @@ contextBridge.exposeInMainWorld('clawRemote', {
   onSessions: (callback) => {
     ipcRenderer.on('sessions', (_event, sessions) => callback(sessions));
   },
+  onTerminalOutput: (callback) => {
+    ipcRenderer.on('terminal-output', (_event, data) => callback(data));
+  },
 });

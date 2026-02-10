@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Claw Remote</title>
+  <title>OpenRemote</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-      background: #0a0a1a;
+      background: #000;
       color: #e0e0e0;
       height: 100vh;
       overflow: hidden;
@@ -18,117 +18,255 @@
     }
 
     .header {
-      padding: 16px 20px;
-      border-bottom: 1px solid #1a1a2e;
+      padding: 14px 20px;
+      border-bottom: 1px solid #222;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      background: #0a0a0a;
     }
-    .header h1 { font-size: 16px; font-weight: 600; color: #fff; }
+    .header h1 { font-size: 15px; font-weight: 600; color: #fff; }
     .header h1 span { color: #00ff88; }
 
     .status-dot {
       width: 8px; height: 8px; border-radius: 50%;
-      background: #444; display: inline-block; margin-right: 6px;
+      background: #333; display: inline-block; margin-right: 6px;
     }
     .status-dot.active { background: #00ff88; }
     .status-dot.connecting { background: #ffaa00; animation: pulse 1s infinite; }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-    .status-text { font-size: 12px; color: #888; }
+    .status-text { font-size: 12px; color: #666; }
 
-    .content { flex: 1; overflow-y: auto; padding: 20px; }
-
-    .qr-section { text-align: center; margin-bottom: 20px; }
-    .qr-section img { border-radius: 8px; background: #fff; padding: 8px; }
-    .qr-label { font-size: 12px; color: #888; margin-top: 8px; }
-
-    .card {
-      background: #111128; border: 1px solid #1a1a2e;
-      border-radius: 8px; padding: 12px 16px; margin-bottom: 12px;
+    .main {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
     }
-    .card-label {
-      font-size: 11px; text-transform: uppercase;
-      letter-spacing: 0.5px; color: #666; margin-bottom: 4px;
+
+    .sidebar {
+      width: 240px;
+      background: #0a0a0a;
+      border-right: 1px solid #222;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
     }
-    .card-value {
+
+    .toggle-btn {
+      background: none;
+      border: 1px solid #222;
+      color: #444;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .toggle-btn:hover { color: #888; border-color: #333; }
+    .toggle-btn.active { color: #00ff88; border-color: #00ff88; }
+
+    .collapsible {
+      display: none;
+    }
+    .collapsible.show {
+      display: block;
+    }
+
+    .section-toggle {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .qr-section { text-align: center; }
+    .qr-section img { 
+      border-radius: 8px; 
+      background: #fff; 
+      padding: 6px;
+      width: 140px;
+      height: 140px;
+    }
+    .qr-label { font-size: 11px; color: #555; margin-top: 8px; }
+
+    .info-block { }
+    .info-label {
+      font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.5px; color: #444; margin-bottom: 4px;
+    }
+    .info-value {
       font-family: 'SF Mono', 'Fira Code', monospace;
-      font-size: 13px; color: #fff; word-break: break-all; user-select: all;
+      font-size: 11px; color: #888; word-break: break-all; user-select: all;
     }
-    .card-value.green { color: #00ff88; }
-    .card-value.yellow { color: #ffaa00; }
+    .info-value.green { color: #00ff88; }
+    .info-value.yellow { color: #ffaa00; }
 
     .btn {
-      background: #1a1a2e; border: 1px solid #2a2a4e; color: #ccc;
-      padding: 6px 12px; border-radius: 6px; font-size: 12px;
-      cursor: pointer; transition: background 0.15s;
+      background: #111; border: 1px solid #222; color: #666;
+      padding: 6px 10px; border-radius: 4px; font-size: 11px;
+      cursor: pointer; transition: all 0.15s;
     }
-    .btn:hover { background: #2a2a4e; color: #fff; }
-    .btn-row { display: flex; gap: 8px; margin-bottom: 12px; }
+    .btn:hover { background: #1a1a1a; color: #fff; border-color: #333; }
+    .btn-row { display: flex; gap: 6px; flex-wrap: wrap; }
 
-    .sessions-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .sessions-list { display: flex; flex-wrap: wrap; gap: 4px; }
     .session-chip {
-      background: #1a2e1a; border: 1px solid #2a4e2a; color: #00ff88;
-      padding: 4px 10px; border-radius: 12px; font-size: 11px; font-family: monospace;
+      background: #0a1a0a; border: 1px solid #1a2a1a; color: #00ff88;
+      padding: 2px 8px; border-radius: 10px; font-size: 10px; font-family: monospace;
     }
 
-    .logs-section { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-    .logs-header {
+    .terminal-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .terminal-header {
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center;
+      padding: 10px 16px;
+      background: #0a0a0a;
+      border-bottom: 1px solid #222;
+    }
+    .terminal-label {
       font-size: 11px; text-transform: uppercase;
-      letter-spacing: 0.5px; color: #666; margin-bottom: 8px;
+      letter-spacing: 0.5px; color: #444;
     }
-    .logs {
-      flex: 1; background: #050510; border: 1px solid #1a1a2e; border-radius: 8px;
-      padding: 8px 12px; font-family: 'SF Mono', 'Fira Code', monospace;
-      font-size: 11px; line-height: 1.6; overflow-y: auto;
-      min-height: 120px; max-height: 200px;
+    .terminal-badge {
+      background: #0a1a0a; border: 1px solid #1a2a1a; color: #00ff88;
+      padding: 2px 8px; border-radius: 10px; font-size: 10px; font-family: monospace;
     }
-    .log-entry { color: #888; }
-    .log-entry .time { color: #555; }
-    .log-entry .msg { color: #aaa; }
+
+    .terminal-output {
+      flex: 1;
+      background: #000;
+      padding: 16px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      overflow-y: auto;
+      color: #00ff88;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .logs-panel {
+      height: 120px;
+      background: #050505;
+      border-top: 1px solid #222;
+      overflow-y: auto;
+      padding: 10px 16px;
+    }
+    .logs-panel.collapsible { display: none; }
+    .logs-panel.collapsible.show { display: block; }
+    .log-entry { font-size: 11px; font-family: monospace; color: #444; line-height: 1.5; }
+    .log-entry .time { color: #333; }
+    .log-entry .msg { color: #555; }
+
+    .panel-bar {
+      display: flex;
+      background: #0a0a0a;
+      border-top: 1px solid #222;
+      padding: 0;
+    }
+    .panel-tab {
+      background: none;
+      border: none;
+      color: #444;
+      padding: 6px 12px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .panel-tab:hover { color: #888; }
+    .panel-tab.active { color: #00ff88; background: #050505; }
+
+    .close-btn {
+      background: none;
+      border: none;
+      color: #444;
+      font-size: 18px;
+      line-height: 1;
+      cursor: pointer;
+      padding: 0 4px;
+      transition: color 0.15s;
+    }
+    .close-btn:hover { color: #ff4444; }
   </style>
 </head>
 <body>
 
   <div class="header">
-    <h1><span>></span> Claw Remote</h1>
+    <h1><span>></span> OpenRemote</h1>
     <div style="display: flex; align-items: center;">
       <span class="status-dot connecting" id="statusDot"></span>
       <span class="status-text" id="statusText">Starting...</span>
     </div>
   </div>
 
-  <div class="content">
-    <div class="qr-section">
-      <img id="qrCode" width="180" height="180" alt="QR Code" />
-      <div class="qr-label">Scan with Claw Remote on your phone</div>
-    </div>
+  <div class="main">
+    <div class="sidebar">
+      <div class="qr-section">
+        <img id="qrCode" alt="QR Code" />
+        <div class="qr-label">Scan to connect</div>
+      </div>
 
-    <div class="card">
-      <div class="card-label">Tunnel URL</div>
-      <div class="card-value yellow" id="tunnelUrl">Connecting...</div>
-    </div>
+      <div class="info-block">
+        <div class="info-label">Sessions</div>
+        <div class="sessions-list" id="sessionsList">
+          <span style="color: #333; font-size: 11px;">None</span>
+        </div>
+      </div>
 
-    <div class="card">
-      <div class="card-label">Pairing Token</div>
-      <div class="card-value" id="tokenValue">Loading...</div>
-    </div>
+      <div class="info-block">
+        <div class="section-toggle">
+          <span class="info-label">Settings</span>
+          <button class="toggle-btn" id="toggleSettings">Show</button>
+        </div>
+        <div class="collapsible" id="settingsPanel">
+          <div style="margin-bottom: 12px;">
+            <div class="info-label" style="margin-bottom: 4px;">Tunnel</div>
+            <div class="info-value yellow" id="tunnelUrl">Connecting...</div>
+          </div>
+          <div style="margin-bottom: 12px;">
+            <div class="info-label" style="margin-bottom: 4px;">Token</div>
+            <div class="info-value" id="tokenValue">...</div>
+          </div>
+          <div class="btn-row">
+            <button class="btn" id="btnRegenToken">Regenerate</button>
+            <button class="btn" id="btnCopyToken">Copy</button>
+          </div>
+        </div>
+      </div>
 
-    <div class="btn-row">
-      <button class="btn" id="btnRefreshQR">Refresh QR</button>
-      <button class="btn" id="btnRegenToken">New Token</button>
-      <button class="btn" id="btnCopyToken">Copy Token</button>
-    </div>
-
-    <div class="card">
-      <div class="card-label">Active Sessions</div>
-      <div class="sessions-list" id="sessionsList">
-        <span style="color: #555; font-size: 12px;">None</span>
+      <div class="info-block">
+        <div class="section-toggle">
+          <span class="info-label">Terminal</span>
+          <button class="toggle-btn" id="toggleTerminal">Show</button>
+        </div>
       </div>
     </div>
 
-    <div class="logs-section">
-      <div class="logs-header">Connection Logs</div>
-      <div class="logs" id="logsContainer"></div>
+    <div class="terminal-area collapsible" id="terminalPanel">
+      <div class="terminal-header">
+        <span class="terminal-label">Terminal Output</span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="terminal-badge" id="terminalStatus">Waiting...</span>
+          <button class="close-btn" id="closeTerminal">×</button>
+        </div>
+      </div>
+      <div class="terminal-output" id="terminalOutput"></div>
+      <div class="logs-panel collapsible" id="logsPanel">
+        <div id="logsContainer"></div>
+      </div>
+      <div class="panel-bar">
+        <button class="panel-tab" id="toggleLogs">Logs</button>
+      </div>
     </div>
   </div>
 
@@ -154,7 +292,7 @@
     function updateSessions(sessionIds) {
       const el = $('#sessionsList');
       if (!sessionIds || sessionIds.length === 0) {
-        el.innerHTML = '<span style="color: #555; font-size: 12px;">None</span>';
+        el.innerHTML = '<span style="color: #333; font-size: 11px;">None</span>';
         return;
       }
       el.innerHTML = sessionIds.map(id =>
@@ -169,12 +307,12 @@
 
       if (status.tunnelUrl) {
         $('#tunnelUrl').textContent = status.tunnelUrl;
-        $('#tunnelUrl').className = 'card-value green';
+        $('#tunnelUrl').className = 'info-value green';
         $('#statusDot').className = 'status-dot active';
         $('#statusText').textContent = `${status.connectedClients} client(s)`;
       } else {
         $('#tunnelUrl').textContent = 'Connecting...';
-        $('#tunnelUrl').className = 'card-value yellow';
+        $('#tunnelUrl').className = 'info-value yellow';
       }
 
       updateSessions(status.activeSessions);
@@ -193,7 +331,7 @@
 
     window.clawRemote.onTunnelUrl(async (url) => {
       $('#tunnelUrl').textContent = url;
-      $('#tunnelUrl').className = 'card-value green';
+      $('#tunnelUrl').className = 'info-value green';
       $('#statusDot').className = 'status-dot active';
       $('#statusText').textContent = 'Ready';
       const qr = await window.clawRemote.getQRCode();
@@ -202,9 +340,30 @@
 
     window.clawRemote.onSessions((sessions) => updateSessions(sessions));
 
-    $('#btnRefreshQR').addEventListener('click', async () => {
-      const qr = await window.clawRemote.getQRCode();
-      if (qr) $('#qrCode').src = qr;
+    // Strip ANSI escape codes and control characters
+    function cleanTerminalOutput(str) {
+      return str
+        .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+        .replace(/\x1b\][^\x07]*\x07/g, '')
+        .replace(/\x1b[()][AB012]/g, '')
+        .replace(/\x1b\[[\?]?[0-9;]*[hlm]/g, '')
+        .replace(/\x1b=/g, '')
+        .replace(/\x07/g, '')
+        .replace(/\r\n/g, '\n')
+        .replace(/\r/g, '\n')
+        .replace(/\n{3,}/g, '\n\n');
+    }
+
+    window.clawRemote.onTerminalOutput(({ sessionId, data }) => {
+      const termEl = $('#terminalOutput');
+      const statusEl = $('#terminalStatus');
+      statusEl.textContent = `Session: ${sessionId}`;
+      const cleanData = cleanTerminalOutput(data);
+      termEl.textContent += cleanData;
+      if (termEl.textContent.length > 10000) {
+        termEl.textContent = termEl.textContent.slice(-8000);
+      }
+      termEl.scrollTop = termEl.scrollHeight;
     });
 
     $('#btnRegenToken').addEventListener('click', async () => {
@@ -220,7 +379,42 @@
       navigator.clipboard.writeText($('#tokenValue').textContent);
       const btn = $('#btnCopyToken');
       btn.textContent = 'Copied!';
-      setTimeout(() => btn.textContent = 'Copy Token', 1500);
+      setTimeout(() => btn.textContent = 'Copy', 1500);
+    });
+
+    // Toggle settings panel
+    $('#toggleSettings').addEventListener('click', () => {
+      const panel = $('#settingsPanel');
+      const btn = $('#toggleSettings');
+      panel.classList.toggle('show');
+      btn.textContent = panel.classList.contains('show') ? 'Hide' : 'Show';
+      btn.classList.toggle('active', panel.classList.contains('show'));
+    });
+
+    // Toggle terminal panel
+    $('#toggleTerminal').addEventListener('click', () => {
+      const panel = $('#terminalPanel');
+      const btn = $('#toggleTerminal');
+      panel.classList.toggle('show');
+      btn.textContent = panel.classList.contains('show') ? 'Hide' : 'Show';
+      btn.classList.toggle('active', panel.classList.contains('show'));
+    });
+
+    // Close terminal panel
+    $('#closeTerminal').addEventListener('click', () => {
+      const panel = $('#terminalPanel');
+      const btn = $('#toggleTerminal');
+      panel.classList.remove('show');
+      btn.textContent = 'Show';
+      btn.classList.remove('active');
+    });
+
+    // Toggle logs panel
+    $('#toggleLogs').addEventListener('click', () => {
+      const panel = $('#logsPanel');
+      const btn = $('#toggleLogs');
+      panel.classList.toggle('show');
+      btn.classList.toggle('active', panel.classList.contains('show'));
     });
 
     loadStatus();

@@ -8,13 +8,19 @@ struct TerminalView: View {
     @State private var showDisconnectAlert = false
 
     private let quickCommands = [
-        ("git status", "git status"),
-        ("git pull", "git pull"),
-        ("git log", "git log --oneline -10"),
         ("ls", "ls -la"),
+        ("git status", "git status"),
         ("clear", "clear"),
         ("Ctrl+C", "\u{03}"),
     ]
+    
+    // Arrow key escape sequences
+    private let arrowUp = "\u{1b}[A"
+    private let arrowDown = "\u{1b}[B"
+    private let arrowRight = "\u{1b}[C"
+    private let arrowLeft = "\u{1b}[D"
+    private let enterKey = "\r"
+    private let escKey = "\u{1b}"
 
     var body: some View {
         NavigationStack {
@@ -63,6 +69,56 @@ struct TerminalView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
+                // Arrow keys and special keys bar
+                HStack(spacing: 12) {
+                    Button { connection.sendInput(escKey) } label: {
+                        Text("ESC")
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(.orange)
+                    }
+                    
+                    Spacer()
+                    
+                    Button { connection.sendInput(arrowUp) } label: {
+                        Image(systemName: "chevron.up")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.green)
+                    }
+                    
+                    Spacer()
+                    
+                    HStack(spacing: 20) {
+                        Button { connection.sendInput(arrowLeft) } label: {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.green)
+                        }
+                        
+                        Button { connection.sendInput(arrowDown) } label: {
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.green)
+                        }
+                        
+                        Button { connection.sendInput(arrowRight) } label: {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.green)
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    Button { connection.sendInput(enterKey) } label: {
+                        Text("RET")
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(.green)
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(Color(.systemGray5))
+
                 HStack(spacing: 8) {
                     Button {
                         withAnimation { showQuickCommands.toggle() }
@@ -96,6 +152,14 @@ struct TerminalView: View {
                         Text("⇥")
                             .font(.system(size: 18, weight: .medium))
                             .foregroundStyle(.green)
+                    }
+                    
+                    Button {
+                        connection.sendInput("\u{03}")
+                    } label: {
+                        Text("^C")
+                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(.red)
                     }
                 }
                 .padding(.horizontal, 12)

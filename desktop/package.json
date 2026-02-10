@@ -1,5 +1,5 @@
 {
-  "name": "claw-remote",
+  "name": "openremote",
   "version": "0.1.0",
   "description": "Control your computer's terminal from your phone",
   "main": "src/main.js",
@@ -7,11 +7,17 @@
     "start": "electron --no-sandbox .",
     "test-client": "node test-client.js"
   },
-  "keywords": ["terminal", "remote", "electron", "websocket"],
+  "keywords": [
+    "terminal",
+    "remote",
+    "electron",
+    "websocket"
+  ],
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "electron": "^40.2.1"
+    "electron": "^40.2.1",
+    "electron-rebuild": "^3.2.9"
   },
   "dependencies": {
     "electron-store": "^8.2.0",

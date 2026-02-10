@@ -32,7 +32,7 @@ function log(message) {
   const entry = { time: new Date().toISOString(), message };
   logs.push(entry);
   if (logs.length > 200) logs.shift();
-  console.log(`[Claw] ${message}`);
+  console.log(`[OpenRemote] ${message}`);
   if (dashboardWindow && !dashboardWindow.isDestroyed()) {
     dashboardWindow.webContents.send('log', entry);
   }
@@ -277,6 +277,10 @@ function handleClientMessage(ws, msg) {
         if (ws.readyState === ws.OPEN) {
           ws.send(JSON.stringify({ type: 'output', sessionId, data }));
         }
+        // Send to dashboard for live view
+        if (dashboardWindow && !dashboardWindow.isDestroyed()) {
+          dashboardWindow.webContents.send('terminal-output', { sessionId, data });
+        }
       });
 
       term.onExit(({ exitCode }) => {
@@ -358,7 +362,7 @@ function createTray() {
   const icon = nativeImage.createFromDataURL(dataUrl).resize({ width: 16, height: 16 });
 
   tray = new Tray(icon);
-  tray.setToolTip('Claw Remote');
+  tray.setToolTip('OpenRemote');
 
   const contextMenu = Menu.buildFromTemplate([
     {
@@ -383,7 +387,7 @@ function createTray() {
     },
     { type: 'separator' },
     {
-      label: 'Quit Claw Remote',
+      label: 'Quit OpenRemote',
       click: () => {
         cleanup();
         app.quit();
@@ -402,11 +406,11 @@ function showDashboard() {
   }
 
   dashboardWindow = new BrowserWindow({
-    width: 480,
-    height: 620,
+    width: 900,
+    height: 650,
     resizable: true,
     frame: true,
-    title: 'Claw Remote',
+    title: 'OpenRemote',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -499,7 +503,7 @@ app.whenReady().then(async () => {
   createTray();
   showDashboard();
 
-  log('Claw Remote is running');
+  log('OpenRemote is running');
 });
 
 app.on('window-all-closed', (e) => {
