@@ -16,7 +16,6 @@ struct ScannerView: View {
                 }
                 .ignoresSafeArea()
 
-                // Overlay with cutout
                 VStack {
                     Spacer()
 
@@ -56,8 +55,7 @@ struct ScannerView: View {
     private func handleScan(_ code: String) {
         guard let data = code.data(using: .utf8),
               let info = try? JSONDecoder().decode(ConnectionInfo.self, from: data) else {
-            error = "Invalid QR code — not a Claw Remote code"
-            // Reset after a moment so they can try again
+            error = "Invalid QR code"
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { error = nil }
             return
         }
@@ -68,7 +66,6 @@ struct ScannerView: View {
     }
 }
 
-// UIKit wrapper for the camera-based QR scanner
 struct QRScannerRepresentable: UIViewControllerRepresentable {
     let onCode: (String) -> Void
 

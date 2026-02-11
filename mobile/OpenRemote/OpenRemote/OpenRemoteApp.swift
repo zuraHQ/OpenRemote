@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct ClawRemoteApp: App {
+struct OpenRemoteApp: App {
     @StateObject private var connection = ConnectionManager()
 
     var body: some Scene {

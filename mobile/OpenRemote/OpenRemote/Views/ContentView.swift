@@ -3,7 +3,6 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject var connection: ConnectionManager
     @State private var showScanner = false
-    @State private var connectionInfo: ConnectionInfo?
 
     var body: some View {
         Group {
@@ -23,7 +22,6 @@ struct ContentView: View {
             }
         }
         .onAppear {
-            // Auto-connect if we have saved connection
             if connection.state == .disconnected, let saved = ConnectionInfo.load() {
                 connection.connect(info: saved)
             }

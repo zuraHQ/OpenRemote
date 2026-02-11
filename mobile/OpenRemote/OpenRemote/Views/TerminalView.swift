@@ -14,7 +14,6 @@ struct TerminalView: View {
         ("Ctrl+C", "\u{03}"),
     ]
     
-    // Arrow key escape sequences
     private let arrowUp = "\u{1b}[A"
     private let arrowDown = "\u{1b}[B"
     private let arrowRight = "\u{1b}[C"
@@ -69,7 +68,6 @@ struct TerminalView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
-                // Arrow keys and special keys bar
                 HStack(spacing: 12) {
                     Button { connection.sendInput(escKey) } label: {
                         Text("ESC")

@@ -17,7 +17,7 @@ struct HomeView: View {
                         .font(.system(size: 64, weight: .bold, design: .monospaced))
                         .foregroundStyle(.green)
 
-                    Text("Claw Remote")
+                    Text("OpenRemote")
                         .font(.title.bold())
 
                     Text("Control your terminal from here")
@@ -25,7 +25,6 @@ struct HomeView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                // Error message if connection failed
                 if case .failed(let msg) = connection.state {
                     Text(msg)
                         .font(.caption)
@@ -37,7 +36,6 @@ struct HomeView: View {
 
                 Spacer()
 
-                // Scan QR button
                 Button {
                     showScanner = true
                 } label: {
@@ -50,7 +48,6 @@ struct HomeView: View {
                 .tint(.green)
                 .padding(.horizontal, 40)
 
-                // Manual connect toggle
                 Button {
                     withAnimation { showManual.toggle() }
                 } label: {
