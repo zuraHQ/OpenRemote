@@ -7,6 +7,8 @@ struct ChatView: View {
     @State private var showDisconnectAlert = false
     @State private var currentModel: ClaudeModel = ClaudeModel.load()
     @State private var toastMessage: String?
+    @State private var showPortPicker = false
+    @State private var previewPort = "3000"
     
     var body: some View {
         NavigationStack {
@@ -125,11 +127,26 @@ struct ChatView: View {
                             .fill(connection.state == .connected ? .green : .orange)
                             .frame(width: 8, height: 8)
                         if connection.isClaudeThinking {
-                            Text("working...")
+                            Text(connection.currentActivity.isEmpty ? "working..." : connection.currentActivity)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
+                                .lineLimit(1)
                         }
                     }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showPortPicker = true
+                    } label: {
+                        if connection.isPreviewLoading {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                        } else {
+                            Image(systemName: "play.fill")
+                                .foregroundStyle(.orange)
+                        }
+                    }
+                    .disabled(connection.isPreviewLoading)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
@@ -169,6 +186,26 @@ struct ChatView: View {
                 Button("Disconnect", role: .destructive) { connection.disconnect() }
                 Button("Cancel", role: .cancel) {}
             }
+            .alert("Preview localhost", isPresented: $showPortPicker) {
+                TextField("Port", text: $previewPort)
+                    .keyboardType(.numberPad)
+                Button("Preview") {
+                    if let port = Int(previewPort) {
+                        connection.startPreview(port: port)
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Enter the port your dev server is running on")
+            }
+            .fullScreenCover(item: Binding(
+                get: { connection.previewUrl.map { PreviewURL(url: $0) } },
+                set: { _ in connection.stopPreview() }
+            )) { preview in
+                PreviewView(url: preview.url) {
+                    connection.stopPreview()
+                }
+            }
         }
     }
     
@@ -198,6 +235,11 @@ struct ChatView: View {
         connection.clearMessages()
         showToast("Switched to \(model.displayName)")
     }
+}
+
+struct PreviewURL: Identifiable {
+    let url: String
+    var id: String { url }
 }
 
 struct TrustPromptBubble: View {
@@ -482,32 +524,21 @@ struct WelcomeView: View {
     let onPromptTap: (String) -> Void
     
     private let examplePrompts = [
-        ("Explain this codebase", "clipboard.fill"),
-        ("Find and fix bugs", "ladybug.fill"),
-        ("Write unit tests", "checkmark.shield.fill"),
-        ("Refactor this function", "arrow.triangle.2.circlepath"),
-        ("Add a new feature", "plus.circle.fill"),
-        ("Review my changes", "eye.fill")
+        ("Search my desktop", "magnifyingglass"),
+        ("What files are here?", "folder.fill"),
+        ("Summarize this folder", "doc.text.fill"),
+        ("Open my notes", "note.text"),
+        ("Run a command", "terminal.fill"),
+        ("Help me with a task", "sparkles")
     ]
     
     var body: some View {
         VStack(spacing: 24) {
-            VStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [.orange, .purple],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 80, height: 80)
-                    
-                    Image(systemName: "terminal.fill")
-                        .font(.system(size: 36))
-                        .foregroundStyle(.white)
-                }
+            VStack(spacing: 16) {
+                Image("Vector")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 80, height: 80)
                 
                 Text("OpenRemote")
                     .font(.title2.bold())

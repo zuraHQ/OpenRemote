@@ -38,6 +38,8 @@ enum OutgoingMessage {
     case resize(sessionId: String, cols: Int, rows: Int)
     case kill(sessionId: String)
     case ping
+    case startPreview(port: Int)
+    case stopPreview
 
     func toJSON() -> String {
         var dict: [String: Any] = [:]
@@ -54,6 +56,10 @@ enum OutgoingMessage {
             dict = ["type": "kill", "sessionId": sessionId]
         case .ping:
             dict = ["type": "ping"]
+        case .startPreview(let port):
+            dict = ["type": "start_preview", "port": port]
+        case .stopPreview:
+            dict = ["type": "stop_preview"]
         }
         let data = try! JSONSerialization.data(withJSONObject: dict)
         return String(data: data, encoding: .utf8)!
@@ -68,6 +74,9 @@ enum IncomingMessage {
     case sessions([String])
     case pong
     case error(String)
+    case previewReady(url: String, port: Int)
+    case previewError(message: String)
+    case previewStopped
     case unknown
 
     static func parse(_ text: String) -> IncomingMessage {
@@ -98,6 +107,15 @@ enum IncomingMessage {
             return .pong
         case "error":
             return .error(json["message"] as? String ?? "Unknown error")
+        case "preview_ready":
+            return .previewReady(
+                url: json["url"] as? String ?? "",
+                port: json["port"] as? Int ?? 3000
+            )
+        case "preview_error":
+            return .previewError(message: json["message"] as? String ?? "Preview failed")
+        case "preview_stopped":
+            return .previewStopped
         default:
             return .unknown
         }

@@ -10,6 +10,9 @@ class ConnectionManager: ObservableObject {
     @Published var messages: [ChatMessage] = []
     @Published var isClaudeThinking: Bool = false
     @Published var showTrustPrompt: Bool = false
+    @Published var previewUrl: String?
+    @Published var isPreviewLoading: Bool = false
+    @Published var currentActivity: String = ""
     
     private var webSocket: URLSessionWebSocketTask?
     private var session: URLSession?
@@ -66,6 +69,7 @@ class ConnectionManager: ObservableObject {
         claudeSessionId = nil
         outputBuffer = ""
         jsonLineBuffer = ""
+        currentActivity = ""
         
         if clearSaved {
             ConnectionInfo.clear()
@@ -101,15 +105,16 @@ class ConnectionManager: ObservableObject {
         isClaudeThinking = true
         isWaitingForResponse = true
         outputBuffer = ""
+        currentActivity = "Starting..."
         
         let model = UserDefaults.standard.string(forKey: "claudeModel") ?? "sonnet"
         let escapedText = text.replacingOccurrences(of: "\"", with: "\\\"").replacingOccurrences(of: "`", with: "\\`")
         
         var command: String
         if let sid = claudeSessionId {
-            command = "claude -p \"\(escapedText)\" --resume \(sid) --model \(model) --output-format json --dangerously-skip-permissions"
+            command = "claude -p \"\(escapedText)\" --resume \(sid) --model \(model) --output-format stream-json --verbose --dangerously-skip-permissions"
         } else {
-            command = "claude -p \"\(escapedText)\" --model \(model) --output-format json --dangerously-skip-permissions"
+            command = "claude -p \"\(escapedText)\" --model \(model) --output-format stream-json --verbose --dangerously-skip-permissions"
         }
         
         print("[OpenRemote] Command: \(command)")
@@ -128,6 +133,18 @@ class ConnectionManager: ObservableObject {
         currentAssistantMessage = nil
         isWaitingForResponse = false
         claudeSessionId = nil
+        currentActivity = ""
+        isClaudeThinking = false
+    }
+    
+    func startPreview(port: Int = 3000) {
+        isPreviewLoading = true
+        send(.startPreview(port: port))
+    }
+    
+    func stopPreview() {
+        send(.stopPreview)
+        previewUrl = nil
     }
 
     private func send(_ message: OutgoingMessage) {
@@ -190,6 +207,17 @@ class ConnectionManager: ObservableObject {
                 state = .failed(message)
             }
 
+        case .previewReady(let url, _):
+            isPreviewLoading = false
+            previewUrl = url
+            
+        case .previewError:
+            isPreviewLoading = false
+            previewUrl = nil
+            
+        case .previewStopped:
+            previewUrl = nil
+
         case .pong, .unknown:
             break
         }
@@ -197,22 +225,61 @@ class ConnectionManager: ObservableObject {
     
     private func processClaudeOutput(_ rawText: String) {
         let cleanedRaw = stripAnsiCodes(rawText)
-        outputBuffer += cleanedRaw
+        jsonLineBuffer += cleanedRaw
         
         guard isWaitingForResponse else { return }
         
-        print("[OpenRemote] Buffer: \(outputBuffer.suffix(200))")
+        let lines = jsonLineBuffer.components(separatedBy: "\n")
+        jsonLineBuffer = lines.last ?? ""
         
-        if let jsonStart = outputBuffer.firstIndex(of: "{"),
-           let jsonEnd = outputBuffer.lastIndex(of: "}") {
-            let jsonString = String(outputBuffer[jsonStart...jsonEnd])
+        for line in lines.dropLast() {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, trimmed.hasPrefix("{") else { continue }
             
-            if let data = jsonString.data(using: .utf8),
-               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            guard let data = trimmed.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let type = json["type"] as? String else { continue }
+            
+            print("[OpenRemote] JSON type: \(type)")
+            
+            switch type {
+            case "system":
+                if let sid = json["session_id"] as? String {
+                    claudeSessionId = sid
+                }
+                currentActivity = "Thinking..."
                 
+            case "assistant":
+                if let message = json["message"] as? [String: Any],
+                   let content = message["content"] as? [[String: Any]] {
+                    for item in content {
+                        if let itemType = item["type"] as? String {
+                            if itemType == "tool_use" {
+                                let toolName = item["name"] as? String ?? "tool"
+                                let input = item["input"] as? [String: Any]
+                                currentActivity = formatToolActivity(toolName, input: input)
+                                updateToolActivity(currentActivity)
+                            } else if itemType == "text" {
+                                if let text = item["text"] as? String, !text.isEmpty {
+                                    appendToResponse(text)
+                                    currentActivity = "Writing response..."
+                                }
+                            }
+                        }
+                    }
+                }
+                
+            case "user":
+                if let toolResult = json["tool_use_result"] as? [String: Any] {
+                    if toolResult["isImage"] as? Bool == true {
+                        currentActivity = "Processing image..."
+                    } else {
+                        currentActivity = "Processing result..."
+                    }
+                }
+                
+            case "result":
                 if let result = json["result"] as? String {
-                    print("[OpenRemote] Got result: \(result.prefix(100))")
-                    
                     if let sid = json["session_id"] as? String {
                         claudeSessionId = sid
                     }
@@ -229,14 +296,17 @@ class ConnectionManager: ObservableObject {
                     isClaudeThinking = false
                     isWaitingForResponse = false
                     currentAssistantMessage = nil
-                    outputBuffer = ""
-                    return
+                    currentActivity = ""
+                    jsonLineBuffer = ""
                 }
+                
+            default:
+                break
             }
         }
         
         let hasShellPrompt = cleanedRaw.contains("% ") || cleanedRaw.contains("$ ") || cleanedRaw.contains("❯")
-        if hasShellPrompt && !outputBuffer.contains("{") {
+        if hasShellPrompt && !jsonLineBuffer.contains("{") && jsonLineBuffer.count < 50 {
             isClaudeThinking = false
             isWaitingForResponse = false
             
@@ -247,7 +317,8 @@ class ConnectionManager: ObservableObject {
                 }
             }
             currentAssistantMessage = nil
-            outputBuffer = ""
+            currentActivity = ""
+            jsonLineBuffer = ""
         }
     }
     

@@ -27,6 +27,8 @@ let dashboardWindow = null;
 let wss = null;
 let tunnelProcess = null;
 let tunnelUrl = null;
+let previewTunnelProcess = null;
+let previewTunnelUrl = null;
 
 function log(message) {
   const entry = { time: new Date().toISOString(), message };
@@ -190,6 +192,65 @@ async function startTunnel(port) {
   }
 }
 
+async function startPreviewTunnel(port) {
+  // Kill existing preview tunnel if any
+  if (previewTunnelProcess) {
+    previewTunnelProcess.kill();
+    previewTunnelProcess = null;
+    previewTunnelUrl = null;
+  }
+
+  try {
+    const binPath = await ensureCloudflared();
+    log(`Starting preview tunnel for localhost:${port}...`);
+
+    return new Promise((resolve, reject) => {
+      previewTunnelProcess = spawn(binPath, ['tunnel', '--url', `http://localhost:${port}`], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+
+      const timeout = setTimeout(() => {
+        reject(new Error('Preview tunnel timeout'));
+      }, 30000);
+
+      previewTunnelProcess.stderr.on('data', (data) => {
+        const output = data.toString();
+        const match = output.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
+        if (match && !previewTunnelUrl) {
+          previewTunnelUrl = match[0];
+          clearTimeout(timeout);
+          log(`Preview tunnel active: ${previewTunnelUrl}`);
+          resolve(previewTunnelUrl);
+        }
+      });
+
+      previewTunnelProcess.on('close', (code) => {
+        log(`Preview tunnel exited (code ${code})`);
+        previewTunnelUrl = null;
+        previewTunnelProcess = null;
+      });
+
+      previewTunnelProcess.on('error', (err) => {
+        clearTimeout(timeout);
+        log(`Preview tunnel error: ${err.message}`);
+        reject(err);
+      });
+    });
+  } catch (err) {
+    log(`Failed to start preview tunnel: ${err.message}`);
+    throw err;
+  }
+}
+
+function stopPreviewTunnel() {
+  if (previewTunnelProcess) {
+    previewTunnelProcess.kill();
+    previewTunnelProcess = null;
+    previewTunnelUrl = null;
+    log('Preview tunnel stopped');
+  }
+}
+
 // ─── WebSocket Server ───────────────────────────────────────────────────────
 
 function startWebSocketServer(port) {
@@ -327,6 +388,25 @@ function handleClientMessage(ws, msg) {
 
     case 'ping': {
       ws.send(JSON.stringify({ type: 'pong' }));
+      break;
+    }
+
+    case 'start_preview': {
+      const port = msg.port || 3000;
+      log(`Preview requested for port ${port}`);
+      startPreviewTunnel(port)
+        .then((url) => {
+          ws.send(JSON.stringify({ type: 'preview_ready', url, port }));
+        })
+        .catch((err) => {
+          ws.send(JSON.stringify({ type: 'preview_error', message: err.message }));
+        });
+      break;
+    }
+
+    case 'stop_preview': {
+      stopPreviewTunnel();
+      ws.send(JSON.stringify({ type: 'preview_stopped' }));
       break;
     }
 
@@ -480,6 +560,11 @@ function cleanup() {
   if (tunnelProcess) {
     tunnelProcess.kill();
     tunnelProcess = null;
+  }
+
+  if (previewTunnelProcess) {
+    previewTunnelProcess.kill();
+    previewTunnelProcess = null;
   }
 
   if (wss) {

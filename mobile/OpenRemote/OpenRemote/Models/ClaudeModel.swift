@@ -6,8 +6,8 @@ enum ClaudeModel: String, CaseIterable {
     
     var displayName: String {
         switch self {
-        case .opus: return "Opus"
-        case .sonnet: return "Sonnet"
+        case .opus: return "Opus 4.5"
+        case .sonnet: return "Sonnet 4.5"
         }
     }
     
