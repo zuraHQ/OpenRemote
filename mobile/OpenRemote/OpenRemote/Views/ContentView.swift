@@ -4,8 +4,7 @@ struct ContentView: View {
     @EnvironmentObject var connection: ConnectionManager
     @State private var showScanner = false
 
-    var body: some View {
-        Group {
+    var body: some View {        Group {
             switch connection.state {
             case .disconnected, .failed:
                 HomeView(showScanner: $showScanner)

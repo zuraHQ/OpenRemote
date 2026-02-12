@@ -26,8 +26,11 @@ struct ChatView: View {
                                 }
                                 
                                 ForEach(connection.messages) { message in
-                                    MessageRow(message: message)
-                                        .id(message.id)
+                                    MessageRow(
+                                        message: message,
+                                        liveActivity: message.isStreaming ? connection.currentActivity : nil
+                                    )
+                                    .id(message.id)
                                 }
                                 
                                 if connection.showTrustPrompt {
@@ -198,11 +201,10 @@ struct ChatView: View {
             } message: {
                 Text("Enter the port your dev server is running on")
             }
-            .fullScreenCover(item: Binding(
-                get: { connection.previewUrl.map { PreviewURL(url: $0) } },
-                set: { _ in connection.stopPreview() }
-            )) { preview in
-                PreviewView(url: preview.url) {
+            .onChange(of: connection.previewUrl) {
+                if let urlString = connection.previewUrl,
+                   let url = URL(string: urlString) {
+                    UIApplication.shared.open(url)
                     connection.stopPreview()
                 }
             }
@@ -293,7 +295,14 @@ struct TrustPromptBubble: View {
 
 struct MessageRow: View {
     let message: ChatMessage
-    
+    var liveActivity: String? = nil
+
+    private var displayActivity: String? {
+        if let tool = message.toolActivity, !tool.isEmpty { return tool }
+        if let live = liveActivity, !live.isEmpty { return live }
+        return nil
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
@@ -305,16 +314,36 @@ struct MessageRow: View {
                     .foregroundStyle(.secondary)
                 Spacer()
             }
-            
-            if message.isStreaming && message.content.isEmpty {
-                HStack(spacing: 6) {
-                    ProgressView()
-                        .scaleEffect(0.7)
-                    Text("working...")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+
+            if message.isStreaming {
+                if let activity = displayActivity {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                        Text(activity)
+                            .font(.footnote.bold())
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                        Spacer()
+                    }
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 8)
+                    .background(Color.orange.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                } else if message.content.isEmpty {
+                    HStack(spacing: 6) {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                        Text("Connecting...")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 4)
                 }
-                .padding(.vertical, 4)
+
+                if !message.content.isEmpty {
+                    FormattedMessageView(content: message.content)
+                }
             } else if !message.content.isEmpty {
                 FormattedMessageView(content: message.content)
             }

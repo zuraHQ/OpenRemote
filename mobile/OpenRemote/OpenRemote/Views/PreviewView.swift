@@ -33,17 +33,25 @@ struct PreviewView: View {
 
 struct WebView: UIViewRepresentable {
     let url: URL
-    
+
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
+        config.preferences.javaScriptCanOpenWindowsAutomatically = true
+        // Allow loading from any source including localhost/HTTP
+        config.defaultWebpagePreferences.allowsContentJavaScript = true
+
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.allowsBackForwardNavigationGestures = true
-        return webView
-    }
-    
-    func updateUIView(_ webView: WKWebView, context: Context) {
+        webView.isInspectable = true
+
+        // Load once here in makeUIView
         let request = URLRequest(url: url)
         webView.load(request)
+        return webView
+    }
+
+    func updateUIView(_ webView: WKWebView, context: Context) {
+        // Don't reload — the page was already loaded in makeUIView
     }
 }

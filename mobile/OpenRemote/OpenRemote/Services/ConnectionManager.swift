@@ -226,29 +226,54 @@ class ConnectionManager: ObservableObject {
     private func processClaudeOutput(_ rawText: String) {
         let cleanedRaw = stripAnsiCodes(rawText)
         jsonLineBuffer += cleanedRaw
-        
-        guard isWaitingForResponse else { return }
-        
+
+        print("[OpenRemote] Raw chunk (\(cleanedRaw.count) chars): \(cleanedRaw.prefix(200))")
+
+        guard isWaitingForResponse else {
+            print("[OpenRemote] Not waiting for response, skipping")
+            return
+        }
+
         let lines = jsonLineBuffer.components(separatedBy: "\n")
         jsonLineBuffer = lines.last ?? ""
-        
-        for line in lines.dropLast() {
+
+        // Process complete lines + try last line if it looks like complete JSON
+        var linesToProcess = Array(lines.dropLast())
+        if let lastLine = lines.last {
+            let trimmedLast = lastLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmedLast.hasPrefix("{") && trimmedLast.hasSuffix("}") {
+                linesToProcess.append(lastLine)
+                jsonLineBuffer = ""
+            }
+        }
+
+        print("[OpenRemote] Processing \(linesToProcess.count) lines, buffer remaining: \(jsonLineBuffer.count) chars")
+
+        var parsedAny = false
+
+        for line in linesToProcess {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty, trimmed.hasPrefix("{") else { continue }
-            
+
             guard let data = trimmed.data(using: .utf8),
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let type = json["type"] as? String else { continue }
-            
-            print("[OpenRemote] JSON type: \(type)")
-            
+                  let type = json["type"] as? String else {
+                print("[OpenRemote] Failed to parse JSON: \(trimmed.prefix(100))")
+                continue
+            }
+
+            parsedAny = true
+            print("[OpenRemote] JSON event: \(type) | keys: \(json.keys.sorted().joined(separator: ", "))")
+
             switch type {
             case "system":
                 if let sid = json["session_id"] as? String {
                     claudeSessionId = sid
+                    print("[OpenRemote] Session ID: \(sid)")
                 }
                 currentActivity = "Thinking..."
-                
+                updateToolActivity(currentActivity)
+
             case "assistant":
                 if let message = json["message"] as? [String: Any],
                    let content = message["content"] as? [[String: Any]] {
@@ -259,61 +284,100 @@ class ConnectionManager: ObservableObject {
                                 let input = item["input"] as? [String: Any]
                                 currentActivity = formatToolActivity(toolName, input: input)
                                 updateToolActivity(currentActivity)
+                                print("[OpenRemote] Tool use: \(toolName) → \(currentActivity)")
                             } else if itemType == "text" {
                                 if let text = item["text"] as? String, !text.isEmpty {
                                     appendToResponse(text)
                                     currentActivity = "Writing response..."
+                                    updateToolActivity(currentActivity)
+                                    print("[OpenRemote] Text content: \(text.prefix(80))...")
                                 }
                             }
                         }
                     }
+                } else {
+                    print("[OpenRemote] Assistant message but couldn't parse content. Keys: \(json.keys.sorted())")
+                    currentActivity = "Thinking..."
+                    updateToolActivity(currentActivity)
                 }
-                
+
             case "user":
+                currentActivity = "Processing result..."
+                updateToolActivity(currentActivity)
                 if let toolResult = json["tool_use_result"] as? [String: Any] {
                     if toolResult["isImage"] as? Bool == true {
                         currentActivity = "Processing image..."
-                    } else {
-                        currentActivity = "Processing result..."
+                        updateToolActivity(currentActivity)
                     }
                 }
-                
+
             case "result":
-                if let result = json["result"] as? String {
-                    if let sid = json["session_id"] as? String {
-                        claudeSessionId = sid
-                    }
-                    
-                    if let currentMsg = currentAssistantMessage,
-                       let index = messages.firstIndex(where: { $0.id == currentMsg.id }) {
-                        var updated = messages[index]
-                        updated.content = result
-                        updated.isStreaming = false
-                        updated.toolActivity = nil
-                        messages[index] = updated
-                    }
-                    
-                    isClaudeThinking = false
-                    isWaitingForResponse = false
-                    currentAssistantMessage = nil
-                    currentActivity = ""
-                    jsonLineBuffer = ""
+                if let sid = json["session_id"] as? String {
+                    claudeSessionId = sid
                 }
-                
+
+                var finalText: String?
+                if let result = json["result"] as? String {
+                    finalText = result
+                    print("[OpenRemote] Result text: \(result.prefix(100))...")
+                } else if let subtype = json["subtype"] as? String, subtype == "error_response" {
+                    finalText = json["error"] as? String ?? "An error occurred."
+                    print("[OpenRemote] Error result: \(finalText ?? "")")
+                } else {
+                    print("[OpenRemote] Result with no text. Keys: \(json.keys.sorted())")
+                }
+
+                if let currentMsg = currentAssistantMessage,
+                   let index = messages.firstIndex(where: { $0.id == currentMsg.id }) {
+                    var updated = messages[index]
+                    if let text = finalText, !text.isEmpty {
+                        updated.content = text
+                    }
+                    updated.isStreaming = false
+                    updated.toolActivity = nil
+                    messages[index] = updated
+                    print("[OpenRemote] Finalized message, content length: \(updated.content.count)")
+                } else {
+                    print("[OpenRemote] WARNING: Could not find assistant message to finalize")
+                }
+
+                isClaudeThinking = false
+                isWaitingForResponse = false
+                currentAssistantMessage = nil
+                currentActivity = ""
+                jsonLineBuffer = ""
+
             default:
+                print("[OpenRemote] Unknown event type: \(type)")
                 break
             }
         }
-        
+
+        // If we received data but couldn't parse any JSON, update activity so UI isn't stuck
+        if !parsedAny && !cleanedRaw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if currentActivity == "Starting..." || currentActivity.isEmpty {
+                currentActivity = "Processing..."
+                updateToolActivity(currentActivity)
+            }
+        }
+
         let hasShellPrompt = cleanedRaw.contains("% ") || cleanedRaw.contains("$ ") || cleanedRaw.contains("❯")
         if hasShellPrompt && !jsonLineBuffer.contains("{") && jsonLineBuffer.count < 50 {
+            print("[OpenRemote] Shell prompt detected, finalizing")
             isClaudeThinking = false
             isWaitingForResponse = false
-            
+
             if let currentMsg = currentAssistantMessage,
                let index = messages.firstIndex(where: { $0.id == currentMsg.id }) {
                 if messages[index].content.isEmpty {
+                    print("[OpenRemote] Removing empty assistant message")
                     messages.remove(at: index)
+                } else {
+                    var updated = messages[index]
+                    updated.isStreaming = false
+                    updated.toolActivity = nil
+                    messages[index] = updated
+                    print("[OpenRemote] Finalized message on shell prompt, content length: \(updated.content.count)")
                 }
             }
             currentAssistantMessage = nil
@@ -382,7 +446,11 @@ class ConnectionManager: ObservableObject {
 
     private func stripAnsiCodes(_ string: String) -> String {
         var result = string
-        
+
+        // Convert line endings FIRST, before anything else strips \r
+        result = result.replacingOccurrences(of: "\r\n", with: "\n")
+        result = result.replacingOccurrences(of: "\r", with: "\n")
+
         let patterns = [
             "\u{1b}\\[[0-9;]*[a-zA-Z]",
             "\u{1b}\\[[0-9;]*[mGKHJsu]",
@@ -395,7 +463,7 @@ class ConnectionManager: ObservableObject {
             "\u{1b}>",
             "\u{07}",
         ]
-        
+
         for pattern in patterns {
             if let regex = try? NSRegularExpression(pattern: pattern) {
                 result = regex.stringByReplacingMatches(
@@ -405,19 +473,16 @@ class ConnectionManager: ObservableObject {
                 )
             }
         }
-        
+
         result = result.filter { char in
             let scalar = char.unicodeScalars.first!
             return scalar.value >= 32 || scalar == "\n" || scalar == "\t"
         }
-        
-        result = result.replacingOccurrences(of: "\r\n", with: "\n")
-        result = result.replacingOccurrences(of: "\r", with: "\n")
-        
+
         while result.contains("\n\n\n") {
             result = result.replacingOccurrences(of: "\n\n\n", with: "\n\n")
         }
-        
+
         return result
     }
 }
