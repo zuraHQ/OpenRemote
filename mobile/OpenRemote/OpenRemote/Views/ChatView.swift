@@ -1,7 +1,9 @@
 import SwiftUI
+import StoreKit
 
 struct ChatView: View {
     @EnvironmentObject var connection: ConnectionManager
+    @Environment(\.requestReview) private var requestReview
     @State private var inputText = ""
     @FocusState private var inputFocused: Bool
     @State private var showDisconnectAlert = false
@@ -9,6 +11,7 @@ struct ChatView: View {
     @State private var toastMessage: String?
     @State private var showPortPicker = false
     @State private var previewPort = "3000"
+    @State private var showPaywall = false
     
     var body: some View {
         NavigationStack {
@@ -179,6 +182,20 @@ struct ChatView: View {
                         } label: {
                             Label("Disconnect", systemImage: "xmark.circle")
                         }
+
+                        Divider()
+
+                        Button {
+                            showPaywall = true
+                        } label: {
+                            Label("Support Project", systemImage: "heart.fill")
+                        }
+
+                        Button {
+                            requestReview()
+                        } label: {
+                            Label("Leave a Review", systemImage: "star.fill")
+                        }
                     } label: {
                         Image(systemName: "gearshape")
                             .foregroundStyle(.primary)
@@ -207,6 +224,9 @@ struct ChatView: View {
                     UIApplication.shared.open(url)
                     connection.stopPreview()
                 }
+            }
+            .sheet(isPresented: $showPaywall) {
+                SupportPaywallView()
             }
         }
     }
@@ -560,7 +580,7 @@ struct WelcomeView: View {
         ("Run a command", "terminal.fill"),
         ("Help me with a task", "sparkles")
     ]
-    
+
     var body: some View {
         VStack(spacing: 24) {
             VStack(spacing: 16) {
@@ -568,22 +588,23 @@ struct WelcomeView: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: 80, height: 80)
-                
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
+
                 Text("OpenRemote")
                     .font(.title2.bold())
                     .foregroundStyle(.primary)
-                
+
                 Text("Control Claude from your iPhone")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
-            
+
             VStack(alignment: .leading, spacing: 10) {
                 Text("Try asking:")
                     .font(.caption.bold())
                     .foregroundStyle(.secondary)
                     .padding(.leading, 4)
-                
+
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                     ForEach(examplePrompts, id: \.0) { prompt, icon in
                         Button {
