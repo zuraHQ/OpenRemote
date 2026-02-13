@@ -5,7 +5,9 @@
   "main": "src/main.js",
   "scripts": {
     "start": "electron --no-sandbox .",
-    "test-client": "node test-client.js"
+    "test-client": "node test-client.js",
+    "dist": "electron-builder --mac",
+    "dist:dmg": "electron-builder --mac dmg"
   },
   "keywords": [
     "terminal",
@@ -15,8 +17,29 @@
   ],
   "author": "",
   "license": "ISC",
+  "build": {
+    "appId": "com.openremote.desktop",
+    "productName": "OpenRemote",
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": "dmg",
+      "icon": "src/assets/AppIcon.png"
+    },
+    "dmg": {
+      "title": "OpenRemote",
+      "contents": [
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
+    },
+    "files": [
+      "src/**/*",
+      "node_modules/**/*"
+    ]
+  },
   "devDependencies": {
     "electron": "^40.2.1",
+    "electron-builder": "^25.1.8",
     "electron-rebuild": "^3.2.9"
   },
   "dependencies": {

@@ -15,219 +15,226 @@ struct ChatView: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                VStack(spacing: 0) {
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            LazyVStack(spacing: 12) {
-                                if connection.messages.isEmpty && !connection.showTrustPrompt {
-                                    WelcomeView(onPromptTap: { prompt in
-                                        inputText = prompt
-                                        inputFocused = true
-                                    })
-                                    .padding(.top, 40)
-                                }
-                                
-                                ForEach(connection.messages) { message in
-                                    MessageRow(
-                                        message: message,
-                                        liveActivity: message.isStreaming ? connection.currentActivity : nil
-                                    )
-                                    .id(message.id)
-                                }
-                                
-                                if connection.showTrustPrompt {
-                                    TrustPromptBubble(
-                                        onAccept: { connection.acceptTrust() },
-                                        onDecline: { connection.disconnect() }
-                                    )
-                                    .id("trust-prompt")
-                                }
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
-                        }
-                        .scrollDismissesKeyboard(.interactively)
-                        .onTapGesture {
-                            inputFocused = false
-                        }
-                        .onChange(of: connection.messages.count) {
-                            if let last = connection.messages.last {
-                                withAnimation {
-                                    proxy.scrollTo(last.id, anchor: .bottom)
-                                }
-                            }
-                        }
-                        .onChange(of: connection.showTrustPrompt) {
-                            if connection.showTrustPrompt {
-                                withAnimation {
-                                    proxy.scrollTo("trust-prompt", anchor: .bottom)
-                                }
-                            }
-                        }
-                        .onChange(of: inputFocused) {
-                            if inputFocused, let last = connection.messages.last {
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                    withAnimation {
-                                        proxy.scrollTo(last.id, anchor: .bottom)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    
-                    Divider()
-                    
-                    HStack(spacing: 10) {
-                        TextField("Ask Claude...", text: $inputText, axis: .vertical)
-                            .lineLimit(1...6)
-                            .textFieldStyle(.plain)
-                            .font(.system(size: 15))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .background(Color(.secondarySystemBackground))
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                            .focused($inputFocused)
-                            .submitLabel(.send)
-                            .onSubmit { sendMessage() }
-                        
-                        Button {
-                            sendMessage()
-                        } label: {
-                            Image(systemName: "paperplane.fill")
-                                .font(.system(size: 18))
-                                .foregroundStyle(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color(.tertiaryLabel) : .orange)
-                                .frame(width: 36, height: 36)
-                                .background(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.clear : Color.orange.opacity(0.15))
-                                .clipShape(Circle())
-                        }
-                        .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background(Color(.systemBackground))
+            chatContent
+                .background(Color(.systemBackground))
+                .overlay(alignment: .bottom) { toastOverlay }
+                .animation(.easeInOut(duration: 0.25), value: toastMessage)
+                .navigationTitle("OpenRemote")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { chatToolbar }
+                .alert("Disconnect?", isPresented: $showDisconnectAlert) {
+                    Button("Disconnect", role: .destructive) { connection.disconnect() }
+                    Button("Cancel", role: .cancel) {}
                 }
-                
-            }
-            .background(Color(.systemBackground))
-            .overlay(alignment: .bottom) {
-                if toastMessage != nil {
-                    Text(toastMessage!)
-                        .font(.footnote.bold())
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(Color.black.opacity(0.85))
-                        .clipShape(Capsule())
-                        .padding(.bottom, 70)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                .alert("Preview localhost", isPresented: $showPortPicker) {
+                    TextField("Port", text: $previewPort)
+                        .keyboardType(.numberPad)
+                    Button("Preview") {
+                        if let port = Int(previewPort) {
+                            connection.startPreview(port: port)
+                        }
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("Enter the port your dev server is running on")
+                }
+                .onChange(of: connection.previewUrl) {
+                    if let urlString = connection.previewUrl,
+                       let url = URL(string: urlString) {
+                        UIApplication.shared.open(url)
+                        connection.stopPreview()
+                    }
+                }
+                .sheet(isPresented: $showPaywall) {
+                    SupportPaywallView()
+                }
+        }
+    }
+
+    // MARK: - Chat Content
+
+    private var chatContent: some View {
+        VStack(spacing: 0) {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        if connection.messages.isEmpty && !connection.showTrustPrompt {
+                            WelcomeView(onPromptTap: { prompt in
+                                inputText = prompt
+                                inputFocused = true
+                            })
+                            .padding(.top, 40)
+                        }
+
+                        ForEach(connection.messages) { message in
+                            MessageRow(
+                                message: message,
+                                liveActivity: message.isStreaming ? connection.currentActivity : nil
+                            )
+                            .id(message.id)
+                        }
+
+                        if connection.showTrustPrompt {
+                            TrustPromptBubble(
+                                onAccept: { connection.acceptTrust() },
+                                onDecline: { connection.disconnect() }
+                            )
+                            .id("trust-prompt")
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                }
+                .scrollDismissesKeyboard(.interactively)
+                .onTapGesture { inputFocused = false }
+                .onChange(of: connection.messages.count) {
+                    if let last = connection.messages.last {
+                        withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                    }
+                }
+                .onChange(of: connection.showTrustPrompt) {
+                    if connection.showTrustPrompt {
+                        withAnimation { proxy.scrollTo("trust-prompt", anchor: .bottom) }
+                    }
+                }
+                .onChange(of: inputFocused) {
+                    if inputFocused, let last = connection.messages.last {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                        }
+                    }
                 }
             }
-            .animation(.easeInOut(duration: 0.25), value: toastMessage)
-            .navigationTitle("OpenRemote")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(connection.state == .connected ? .green : .orange)
-                            .frame(width: 8, height: 8)
-                        if connection.isClaudeThinking {
-                            Text(connection.currentActivity.isEmpty ? "working..." : connection.currentActivity)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-                    }
+
+            Divider()
+            inputBar
+        }
+    }
+
+    // MARK: - Input Bar
+
+    private var inputBar: some View {
+        let isEmpty = inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return HStack(spacing: 10) {
+            TextField("Ask Claude...", text: $inputText, axis: .vertical)
+                .lineLimit(1...6)
+                .textFieldStyle(.plain)
+                .font(.system(size: 15))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Color(.secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .focused($inputFocused)
+                .submitLabel(.send)
+                .onSubmit { sendMessage() }
+
+            Button { sendMessage() } label: {
+                Image(systemName: "paperplane.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(isEmpty ? Color(.tertiaryLabel) : .orange)
+                    .frame(width: 36, height: 36)
+                    .background(isEmpty ? Color.clear : Color.orange.opacity(0.15))
+                    .clipShape(Circle())
+            }
+            .disabled(isEmpty)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Color(.systemBackground))
+    }
+
+    // MARK: - Toast
+
+    @ViewBuilder
+    private var toastOverlay: some View {
+        if let msg = toastMessage {
+            Text(msg)
+                .font(.footnote.bold())
+                .foregroundStyle(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(Color.black.opacity(0.85))
+                .clipShape(Capsule())
+                .padding(.bottom, 70)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+
+    // MARK: - Toolbar
+
+    @ToolbarContentBuilder
+    private var chatToolbar: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(connection.state == .connected ? .green : .orange)
+                    .frame(width: 8, height: 8)
+                if connection.isClaudeThinking {
+                    Text(connection.currentActivity.isEmpty ? "working..." : connection.currentActivity)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+            }
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            Button { showPortPicker = true } label: {
+                if connection.isPreviewLoading {
+                    ProgressView().scaleEffect(0.8)
+                } else {
+                    Image(systemName: "play.fill").foregroundStyle(.orange)
+                }
+            }
+            .disabled(connection.isPreviewLoading)
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            settingsMenu
+        }
+    }
+
+    // MARK: - Settings Menu
+
+    private var settingsMenu: some View {
+        Menu {
+            Menu {
+                ForEach(ClaudeModel.allCases, id: \.self) { model in
                     Button {
-                        showPortPicker = true
+                        switchModel(to: model)
                     } label: {
-                        if connection.isPreviewLoading {
-                            ProgressView()
-                                .scaleEffect(0.8)
-                        } else {
-                            Image(systemName: "play.fill")
-                                .foregroundStyle(.orange)
-                        }
-                    }
-                    .disabled(connection.isPreviewLoading)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Menu {
-                            ForEach(ClaudeModel.allCases, id: \.self) { model in
-                                Button {
-                                    switchModel(to: model)
-                                } label: {
-                                    Label(model.displayName, systemImage: currentModel == model ? "checkmark" : "")
-                                }
-                            }
-                        } label: {
-                            Label("Model: \(currentModel.displayName)", systemImage: "cpu")
-                        }
-                        
-                        Divider()
-                        
-                        Button {
-                            connection.clearMessages()
-                            showToast("New session started")
-                        } label: {
-                            Label("New Session", systemImage: "plus.circle")
-                        }
-                        
-                        Button(role: .destructive) {
-                            showDisconnectAlert = true
-                        } label: {
-                            Label("Disconnect", systemImage: "xmark.circle")
-                        }
-
-                        Divider()
-
-                        Button {
-                            showPaywall = true
-                        } label: {
-                            Label("Support Project", systemImage: "heart.fill")
-                        }
-
-                        Button {
-                            requestReview()
-                        } label: {
-                            Label("Leave a Review", systemImage: "star.fill")
-                        }
-                    } label: {
-                        Image(systemName: "gearshape")
-                            .foregroundStyle(.primary)
+                        Label(model.displayName, systemImage: currentModel == model ? "checkmark" : "")
                     }
                 }
+            } label: {
+                Label("Model: \(currentModel.displayName)", systemImage: "cpu")
             }
-            .alert("Disconnect?", isPresented: $showDisconnectAlert) {
-                Button("Disconnect", role: .destructive) { connection.disconnect() }
-                Button("Cancel", role: .cancel) {}
+
+            Divider()
+
+            Button {
+                connection.clearMessages()
+                showToast("New session started")
+            } label: {
+                Label("New Session", systemImage: "plus.circle")
             }
-            .alert("Preview localhost", isPresented: $showPortPicker) {
-                TextField("Port", text: $previewPort)
-                    .keyboardType(.numberPad)
-                Button("Preview") {
-                    if let port = Int(previewPort) {
-                        connection.startPreview(port: port)
-                    }
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Enter the port your dev server is running on")
+
+            Button(role: .destructive) {
+                showDisconnectAlert = true
+            } label: {
+                Label("Disconnect", systemImage: "xmark.circle")
             }
-            .onChange(of: connection.previewUrl) {
-                if let urlString = connection.previewUrl,
-                   let url = URL(string: urlString) {
-                    UIApplication.shared.open(url)
-                    connection.stopPreview()
-                }
+
+            Divider()
+
+            Button { showPaywall = true } label: {
+                Label("Support Project", systemImage: "heart.fill")
             }
-            .sheet(isPresented: $showPaywall) {
-                SupportPaywallView()
+
+            Button { requestReview() } label: {
+                Label("Leave a Review", systemImage: "star.fill")
             }
+        } label: {
+            Image(systemName: "gearshape")
+                .foregroundStyle(.primary)
         }
     }
     
