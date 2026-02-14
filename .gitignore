@@ -16,14 +16,13 @@ build/
 .DS_Store
 *.swiftpm
 .build/
-*.xcodeproj
-*.xcworkspace
 xcuserdata/
 DerivedData/
 *.hmap
 *.ipa
 *.dSYM.zip
 *.dSYM
+*.xcuserstate
 
 # Electron
 out/

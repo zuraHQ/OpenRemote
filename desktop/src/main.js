@@ -205,7 +205,11 @@ async function startPreviewTunnel(port) {
     log(`Starting preview tunnel for localhost:${port}...`);
 
     return new Promise((resolve, reject) => {
-      previewTunnelProcess = spawn(binPath, ['tunnel', '--url', `http://localhost:${port}`], {
+      previewTunnelProcess = spawn(binPath, [
+        'tunnel', '--url', `http://localhost:${port}`,
+        '--http-host-header', `localhost:${port}`,
+        '--no-tls-verify'
+      ], {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
 
@@ -213,8 +217,13 @@ async function startPreviewTunnel(port) {
         reject(new Error('Preview tunnel timeout'));
       }, 30000);
 
+      previewTunnelProcess.stdout.on('data', (data) => {
+        log(`[preview-tunnel stdout] ${data.toString().trim()}`);
+      });
+
       previewTunnelProcess.stderr.on('data', (data) => {
         const output = data.toString();
+        log(`[preview-tunnel stderr] ${output.trim()}`);
         const match = output.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
         if (match && !previewTunnelUrl) {
           previewTunnelUrl = match[0];
@@ -228,6 +237,12 @@ async function startPreviewTunnel(port) {
         log(`Preview tunnel exited (code ${code})`);
         previewTunnelUrl = null;
         previewTunnelProcess = null;
+        // Notify all clients the preview died
+        for (const client of clients) {
+          if (client.readyState === client.OPEN) {
+            client.send(JSON.stringify({ type: 'preview_stopped' }));
+          }
+        }
       });
 
       previewTunnelProcess.on('error', (err) => {
@@ -292,6 +307,11 @@ function startWebSocketServer(port) {
             type: 'sessions',
             sessions: Array.from(sessions.keys()),
           }));
+          // Send existing preview tunnel URL if active
+          if (previewTunnelUrl && previewTunnelProcess) {
+            ws.send(JSON.stringify({ type: 'preview_ready', url: previewTunnelUrl, port: 3000 }));
+            log(`Sent existing preview URL to reconnected client: ${previewTunnelUrl}`);
+          }
           return;
         } else {
           ws.send(JSON.stringify({ type: 'error', message: 'Bad token' }));
@@ -393,6 +413,14 @@ function handleClientMessage(ws, msg) {
 
     case 'start_preview': {
       const port = msg.port || 3000;
+      // If tunnel exists and process is still alive, just resend the URL
+      if (previewTunnelUrl && previewTunnelProcess && !previewTunnelProcess.killed) {
+        log(`Preview tunnel already active, resending URL: ${previewTunnelUrl}`);
+        ws.send(JSON.stringify({ type: 'preview_ready', url: previewTunnelUrl, port }));
+        break;
+      }
+      // Otherwise start a fresh tunnel
+      previewTunnelUrl = null;
       log(`Preview requested for port ${port}`);
       startPreviewTunnel(port)
         .then((url) => {

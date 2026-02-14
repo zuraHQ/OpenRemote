@@ -3,21 +3,32 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject var connection: ConnectionManager
     @State private var showScanner = false
+    @State private var hasConnected = false
 
-    var body: some View {        Group {
-            switch connection.state {
-            case .disconnected, .failed:
-                HomeView(showScanner: $showScanner)
-            case .connecting, .authenticating:
-                ConnectingView()
-            case .connected:
+    var body: some View {
+        Group {
+            if hasConnected && !connection.didExplicitlyDisconnect {
                 ChatView()
+            } else {
+                switch connection.state {
+                case .disconnected, .failed:
+                    HomeView(showScanner: $showScanner)
+                case .connecting, .authenticating:
+                    ConnectingView()
+                case .connected:
+                    ChatView()
+                }
             }
         }
         .sheet(isPresented: $showScanner) {
             ScannerView { info in
                 showScanner = false
                 connection.connect(info: info)
+            }
+        }
+        .onChange(of: connection.state) {
+            if connection.state == .connected {
+                hasConnected = true
             }
         }
         .onAppear {

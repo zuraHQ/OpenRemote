@@ -13,7 +13,8 @@ class ConnectionManager: ObservableObject {
     @Published var previewUrl: String?
     @Published var isPreviewLoading: Bool = false
     @Published var currentActivity: String = ""
-    
+    @Published var didExplicitlyDisconnect: Bool = false
+
     private var webSocket: URLSessionWebSocketTask?
     private var session: URLSession?
     private var token: String?
@@ -25,7 +26,8 @@ class ConnectionManager: ObservableObject {
     private var claudeSessionId: String?
 
     func connect(info: ConnectionInfo) {
-        disconnect()
+        disconnect(clearSaved: false)
+        didExplicitlyDisconnect = false
         token = info.token
         info.save()
 
@@ -70,8 +72,9 @@ class ConnectionManager: ObservableObject {
         outputBuffer = ""
         jsonLineBuffer = ""
         currentActivity = ""
-        
+
         if clearSaved {
+            didExplicitlyDisconnect = true
             ConnectionInfo.clear()
         }
     }
@@ -137,9 +140,22 @@ class ConnectionManager: ObservableObject {
         isClaudeThinking = false
     }
     
+    private var previewTimeoutTask: Task<Void, Never>?
+
     func startPreview(port: Int = 3000) {
         isPreviewLoading = true
+        print("[OpenRemote] Sending start_preview for port \(port)")
         send(.startPreview(port: port))
+
+        previewTimeoutTask?.cancel()
+        previewTimeoutTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 35_000_000_000)
+            if !Task.isCancelled && isPreviewLoading {
+                print("[OpenRemote] Preview tunnel timed out after 35s")
+                isPreviewLoading = false
+                previewUrl = nil
+            }
+        }
     }
     
     func stopPreview() {
@@ -208,12 +224,16 @@ class ConnectionManager: ObservableObject {
             }
 
         case .previewReady(let url, _):
+            previewTimeoutTask?.cancel()
             isPreviewLoading = false
             previewUrl = url
-            
-        case .previewError:
+            print("[OpenRemote] Preview ready: \(url)")
+
+        case .previewError(let message):
+            previewTimeoutTask?.cancel()
             isPreviewLoading = false
             previewUrl = nil
+            print("[OpenRemote] Preview error: \(message)")
             
         case .previewStopped:
             previewUrl = nil

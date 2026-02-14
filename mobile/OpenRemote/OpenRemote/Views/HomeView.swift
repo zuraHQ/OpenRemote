@@ -94,7 +94,7 @@ struct HomeView: View {
 
             VStack(spacing: 20) {
                 Button {
-                    if let url = URL(string: "https://github.com/nickandbro/OpenRemote/releases") {
+                    if let url = URL(string: "https://github.com/zuraHQ/OpenRemote/releases") {
                         UIApplication.shared.open(url)
                     }
                 } label: {

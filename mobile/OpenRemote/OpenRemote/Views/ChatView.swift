@@ -225,12 +225,20 @@ struct ChatView: View {
 
             Divider()
 
+            Button {
+                if let url = URL(string: "https://github.com/zuraHQ/OpenRemote") {
+                    UIApplication.shared.open(url)
+                }
+            } label: {
+                Label("Star us on GitHub", systemImage: "star.fill")
+            }
+
             Button { showPaywall = true } label: {
                 Label("Support Project", systemImage: "heart.fill")
             }
 
             Button { requestReview() } label: {
-                Label("Leave a Review", systemImage: "star.fill")
+                Label("Leave a Review", systemImage: "hand.thumbsup.fill")
             }
         } label: {
             Image(systemName: "gearshape")
