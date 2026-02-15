@@ -18,7 +18,7 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - Step 1: Download Desktop App
+ 
 
     private var downloadStep: some View {
         VStack(spacing: 32) {
