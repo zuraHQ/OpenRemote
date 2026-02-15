@@ -12,6 +12,7 @@ class ConnectionManager: ObservableObject {
     @Published var showTrustPrompt: Bool = false
     @Published var previewUrl: String?
     @Published var isPreviewLoading: Bool = false
+    @Published var previewError: String?
     @Published var currentActivity: String = ""
     @Published var didExplicitlyDisconnect: Bool = false
 
@@ -24,6 +25,9 @@ class ConnectionManager: ObservableObject {
     private var currentAssistantMessage: ChatMessage?
     private var isWaitingForResponse: Bool = false
     private var claudeSessionId: String?
+    private var messageQueue: [(id: UUID, text: String)] = []
+    private var gotResultEvent: Bool = false
+    private var commandSentAt: Date = .distantPast
 
     func connect(info: ConnectionInfo) {
         disconnect(clearSaved: false)
@@ -99,29 +103,71 @@ class ConnectionManager: ObservableObject {
     }
     
     func sendChatMessage(_ text: String) {
-        let userMessage = ChatMessage(role: .user, content: text)
-        messages.append(userMessage)
-        
+        // If Claude is busy, queue the message
+        if isWaitingForResponse {
+            let userMessage = ChatMessage(role: .user, content: text, isQueued: true)
+            messageQueue.append((id: userMessage.id, text: text))
+            messages.append(userMessage)
+            print("[OpenRemote] Message queued (\(messageQueue.count) in queue): \(text.prefix(50))")
+            return
+        }
+
+        sendChatMessageNow(text)
+    }
+
+    private func sendChatMessageNow(_ text: String, messageId: UUID? = nil) {
+        print("[OpenRemote] >>> sendChatMessageNow: \(text.prefix(50))... | waiting=\(isWaitingForResponse) queue=\(messageQueue.count)")
+
+        // Clear queued flag if message was queued (by ID), or add new user message
+        if let mid = messageId, let index = messages.firstIndex(where: { $0.id == mid }) {
+            var updated = messages[index]
+            updated.isQueued = false
+            messages[index] = updated
+        } else {
+            let userMessage = ChatMessage(role: .user, content: text)
+            messages.append(userMessage)
+        }
+
         currentAssistantMessage = ChatMessage(role: .assistant, content: "", isStreaming: true)
         messages.append(currentAssistantMessage!)
-        
+
         isClaudeThinking = true
         isWaitingForResponse = true
+        gotResultEvent = false
         outputBuffer = ""
+        jsonLineBuffer = ""
         currentActivity = "Starting..."
-        
+        commandSentAt = Date()
+
         let model = UserDefaults.standard.string(forKey: "claudeModel") ?? "sonnet"
         let escapedText = text.replacingOccurrences(of: "\"", with: "\\\"").replacingOccurrences(of: "`", with: "\\`")
-        
+
         var command: String
         if let sid = claudeSessionId {
             command = "claude -p \"\(escapedText)\" --resume \(sid) --model \(model) --output-format stream-json --verbose --dangerously-skip-permissions"
         } else {
             command = "claude -p \"\(escapedText)\" --model \(model) --output-format stream-json --verbose --dangerously-skip-permissions"
         }
-        
+
         print("[OpenRemote] Command: \(command)")
         sendCommand(command)
+    }
+
+    private func processQueue() {
+        guard !messageQueue.isEmpty else {
+            print("[OpenRemote] Queue empty, nothing to process")
+            return
+        }
+        let next = messageQueue.removeFirst()
+        print("[OpenRemote] >>> processQueue: sending next (\(messageQueue.count) remaining): \(next.text.prefix(50))")
+        // Wait for terminal to fully settle (shell prompt, cleanup) before next command
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            // Flush any leftover buffer from previous command
+            self.jsonLineBuffer = ""
+            self.outputBuffer = ""
+            self.sendChatMessageNow(next.text, messageId: next.id)
+        }
     }
     
     func acceptTrust() {
@@ -138,6 +184,7 @@ class ConnectionManager: ObservableObject {
         claudeSessionId = nil
         currentActivity = ""
         isClaudeThinking = false
+        messageQueue.removeAll()
     }
     
     private var previewTimeoutTask: Task<Void, Never>?
@@ -154,6 +201,7 @@ class ConnectionManager: ObservableObject {
                 print("[OpenRemote] Preview tunnel timed out after 35s")
                 isPreviewLoading = false
                 previewUrl = nil
+                previewError = "Preview tunnel timed out"
             }
         }
     }
@@ -233,6 +281,7 @@ class ConnectionManager: ObservableObject {
             previewTimeoutTask?.cancel()
             isPreviewLoading = false
             previewUrl = nil
+            previewError = message
             print("[OpenRemote] Preview error: \(message)")
             
         case .previewStopped:
@@ -245,14 +294,15 @@ class ConnectionManager: ObservableObject {
     
     private func processClaudeOutput(_ rawText: String) {
         let cleanedRaw = stripAnsiCodes(rawText)
-        jsonLineBuffer += cleanedRaw
-
-        print("[OpenRemote] Raw chunk (\(cleanedRaw.count) chars): \(cleanedRaw.prefix(200))")
 
         guard isWaitingForResponse else {
-            print("[OpenRemote] Not waiting for response, skipping")
+            // Don't accumulate buffer when not waiting — prevents stale data
+            jsonLineBuffer = ""
             return
         }
+
+        jsonLineBuffer += cleanedRaw
+        print("[OpenRemote] Raw chunk (\(cleanedRaw.count) chars): \(cleanedRaw.prefix(200))")
 
         let lines = jsonLineBuffer.components(separatedBy: "\n")
         jsonLineBuffer = lines.last ?? ""
@@ -366,6 +416,10 @@ class ConnectionManager: ObservableObject {
                 currentAssistantMessage = nil
                 currentActivity = ""
                 jsonLineBuffer = ""
+                gotResultEvent = true
+                print("[OpenRemote] State: waiting=\(isWaitingForResponse), queue=\(messageQueue.count)")
+
+                processQueue()
 
             default:
                 print("[OpenRemote] Unknown event type: \(type)")
@@ -381,28 +435,37 @@ class ConnectionManager: ObservableObject {
             }
         }
 
+        // Shell prompt detection — skip if result event already handled this, or if not waiting
         let hasShellPrompt = cleanedRaw.contains("% ") || cleanedRaw.contains("$ ") || cleanedRaw.contains("❯")
         if hasShellPrompt && !jsonLineBuffer.contains("{") && jsonLineBuffer.count < 50 {
-            print("[OpenRemote] Shell prompt detected, finalizing")
-            isClaudeThinking = false
-            isWaitingForResponse = false
+            if gotResultEvent {
+                // Result already handled it, just clear the flag
+                print("[OpenRemote] Shell prompt after result event, skipping (already handled)")
+                gotResultEvent = false
+            } else if isWaitingForResponse {
+                print("[OpenRemote] Shell prompt detected, finalizing")
+                isClaudeThinking = false
+                isWaitingForResponse = false
 
-            if let currentMsg = currentAssistantMessage,
-               let index = messages.firstIndex(where: { $0.id == currentMsg.id }) {
-                if messages[index].content.isEmpty {
-                    print("[OpenRemote] Removing empty assistant message")
-                    messages.remove(at: index)
-                } else {
-                    var updated = messages[index]
-                    updated.isStreaming = false
-                    updated.toolActivity = nil
-                    messages[index] = updated
-                    print("[OpenRemote] Finalized message on shell prompt, content length: \(updated.content.count)")
+                if let currentMsg = currentAssistantMessage,
+                   let index = messages.firstIndex(where: { $0.id == currentMsg.id }) {
+                    if messages[index].content.isEmpty {
+                        print("[OpenRemote] Removing empty assistant message")
+                        messages.remove(at: index)
+                    } else {
+                        var updated = messages[index]
+                        updated.isStreaming = false
+                        updated.toolActivity = nil
+                        messages[index] = updated
+                        print("[OpenRemote] Finalized message on shell prompt, content length: \(updated.content.count)")
+                    }
                 }
+                currentAssistantMessage = nil
+                currentActivity = ""
+                jsonLineBuffer = ""
+
+                processQueue()
             }
-            currentAssistantMessage = nil
-            currentActivity = ""
-            jsonLineBuffer = ""
         }
     }
     

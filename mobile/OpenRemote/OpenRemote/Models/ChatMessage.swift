@@ -7,6 +7,7 @@ struct ChatMessage: Identifiable, Equatable {
     let timestamp: Date
     var isStreaming: Bool
     var toolActivity: String?
+    var isQueued: Bool
     
     enum Role {
         case user
@@ -14,12 +15,13 @@ struct ChatMessage: Identifiable, Equatable {
         case system
     }
     
-    init(role: Role, content: String, isStreaming: Bool = false, toolActivity: String? = nil) {
+    init(role: Role, content: String, isStreaming: Bool = false, toolActivity: String? = nil, isQueued: Bool = false) {
         self.id = UUID()
         self.role = role
         self.content = content
         self.timestamp = Date()
         self.isStreaming = isStreaming
         self.toolActivity = toolActivity
+        self.isQueued = isQueued
     }
 }

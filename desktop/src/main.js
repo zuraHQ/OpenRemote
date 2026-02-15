@@ -8,7 +8,6 @@ const Store = require('electron-store');
 const QRCode = require('qrcode');
 const { spawn, execFile } = require('child_process');
 const fs = require('fs');
-const https = require('https');
 const os = require('os');
 
 const store = new Store({
@@ -25,10 +24,10 @@ const logs = [];
 let tray = null;
 let dashboardWindow = null;
 let wss = null;
+let httpServer = null;
 let tunnelProcess = null;
 let tunnelUrl = null;
-let previewTunnelProcess = null;
-let previewTunnelUrl = null;
+let previewPort = null; // When set, HTTP requests are proxied to localhost:previewPort
 
 function log(message) {
   const entry = { time: new Date().toISOString(), message };
@@ -111,7 +110,7 @@ async function ensureCloudflared() {
 function downloadFile(url, dest) {
   return new Promise((resolve, reject) => {
     function doRequest(requestUrl) {
-      const proto = requestUrl.startsWith('https') ? https : require('http');
+      const proto = requestUrl.startsWith('https') ? require('https') : require('http');
       proto.get(requestUrl, (response) => {
         if (response.statusCode === 301 || response.statusCode === 302) {
           response.resume();
@@ -192,85 +191,57 @@ async function startTunnel(port) {
   }
 }
 
-async function startPreviewTunnel(port) {
-  // Kill existing preview tunnel if any
-  if (previewTunnelProcess) {
-    previewTunnelProcess.kill();
-    previewTunnelProcess = null;
-    previewTunnelUrl = null;
-  }
 
-  try {
-    const binPath = await ensureCloudflared();
-    log(`Starting preview tunnel for localhost:${port}...`);
-
-    return new Promise((resolve, reject) => {
-      previewTunnelProcess = spawn(binPath, [
-        'tunnel', '--url', `http://localhost:${port}`,
-        '--http-host-header', `localhost:${port}`,
-        '--no-tls-verify'
-      ], {
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
-
-      const timeout = setTimeout(() => {
-        reject(new Error('Preview tunnel timeout'));
-      }, 30000);
-
-      previewTunnelProcess.stdout.on('data', (data) => {
-        log(`[preview-tunnel stdout] ${data.toString().trim()}`);
-      });
-
-      previewTunnelProcess.stderr.on('data', (data) => {
-        const output = data.toString();
-        log(`[preview-tunnel stderr] ${output.trim()}`);
-        const match = output.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
-        if (match && !previewTunnelUrl) {
-          previewTunnelUrl = match[0];
-          clearTimeout(timeout);
-          log(`Preview tunnel active: ${previewTunnelUrl}`);
-          resolve(previewTunnelUrl);
-        }
-      });
-
-      previewTunnelProcess.on('close', (code) => {
-        log(`Preview tunnel exited (code ${code})`);
-        previewTunnelUrl = null;
-        previewTunnelProcess = null;
-        // Notify all clients the preview died
-        for (const client of clients) {
-          if (client.readyState === client.OPEN) {
-            client.send(JSON.stringify({ type: 'preview_stopped' }));
-          }
-        }
-      });
-
-      previewTunnelProcess.on('error', (err) => {
-        clearTimeout(timeout);
-        log(`Preview tunnel error: ${err.message}`);
-        reject(err);
-      });
-    });
-  } catch (err) {
-    log(`Failed to start preview tunnel: ${err.message}`);
-    throw err;
-  }
-}
-
-function stopPreviewTunnel() {
-  if (previewTunnelProcess) {
-    previewTunnelProcess.kill();
-    previewTunnelProcess = null;
-    previewTunnelUrl = null;
-    log('Preview tunnel stopped');
-  }
-}
-
-// ─── WebSocket Server ───────────────────────────────────────────────────────
+// ─── HTTP + WebSocket Server ────────────────────────────────────────────────
 
 function startWebSocketServer(port) {
-  wss = new WebSocketServer({ port });
-  log(`WebSocket server listening on port ${port}`);
+  const http = require('http');
+
+  httpServer = http.createServer((req, res) => {
+    // If preview port is set, proxy HTTP requests to the dev server
+    if (previewPort) {
+      const proxyReq = http.request(
+        {
+          hostname: '127.0.0.1',
+          port: previewPort,
+          path: req.url,
+          method: req.method,
+          headers: {
+            ...req.headers,
+            host: `localhost:${previewPort}`,
+          },
+        },
+        (proxyRes) => {
+          res.writeHead(proxyRes.statusCode, proxyRes.headers);
+          proxyRes.pipe(res, { end: true });
+        }
+      );
+
+      proxyReq.on('error', (err) => {
+        log(`Preview proxy error: ${err.message}`);
+        res.writeHead(502);
+        res.end(`Preview server not reachable on port ${previewPort}`);
+      });
+
+      req.pipe(proxyReq, { end: true });
+    } else {
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      res.end('OpenRemote server running');
+    }
+  });
+
+  wss = new WebSocketServer({ noServer: true });
+
+  // Handle WebSocket upgrade requests
+  httpServer.on('upgrade', (request, socket, head) => {
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit('connection', ws, request);
+    });
+  });
+
+  httpServer.listen(port, () => {
+    log(`HTTP + WebSocket server listening on port ${port}`);
+  });
 
   wss.on('connection', (ws) => {
     let authenticated = false;
@@ -307,10 +278,10 @@ function startWebSocketServer(port) {
             type: 'sessions',
             sessions: Array.from(sessions.keys()),
           }));
-          // Send existing preview tunnel URL if active
-          if (previewTunnelUrl && previewTunnelProcess) {
-            ws.send(JSON.stringify({ type: 'preview_ready', url: previewTunnelUrl, port: 3000 }));
-            log(`Sent existing preview URL to reconnected client: ${previewTunnelUrl}`);
+          // Send existing preview info if active
+          if (previewPort && tunnelUrl) {
+            ws.send(JSON.stringify({ type: 'preview_ready', url: tunnelUrl, port: previewPort }));
+            log(`Sent preview URL to reconnected client: ${tunnelUrl} → localhost:${previewPort}`);
           }
           return;
         } else {
@@ -413,27 +384,39 @@ function handleClientMessage(ws, msg) {
 
     case 'start_preview': {
       const port = msg.port || 3000;
-      // If tunnel exists and process is still alive, just resend the URL
-      if (previewTunnelUrl && previewTunnelProcess && !previewTunnelProcess.killed) {
-        log(`Preview tunnel already active, resending URL: ${previewTunnelUrl}`);
-        ws.send(JSON.stringify({ type: 'preview_ready', url: previewTunnelUrl, port }));
+      log(`Preview requested for port ${port}`);
+
+      if (!tunnelUrl) {
+        ws.send(JSON.stringify({ type: 'preview_error', message: 'Tunnel not active yet' }));
         break;
       }
-      // Otherwise start a fresh tunnel
-      previewTunnelUrl = null;
-      log(`Preview requested for port ${port}`);
-      startPreviewTunnel(port)
-        .then((url) => {
-          ws.send(JSON.stringify({ type: 'preview_ready', url, port }));
-        })
-        .catch((err) => {
-          ws.send(JSON.stringify({ type: 'preview_error', message: err.message }));
-        });
+
+      // Check if dev server is actually running
+      const http = require('http');
+      const checkReq = http.get(`http://localhost:${port}`, (res) => {
+        checkReq.destroy();
+        log(`localhost:${port} is reachable (status ${res.statusCode})`);
+
+        // Set the preview port — all HTTP requests through the tunnel will now proxy here
+        previewPort = port;
+        log(`Preview proxy active: tunnel HTTP → localhost:${port}`);
+        ws.send(JSON.stringify({ type: 'preview_ready', url: tunnelUrl, port }));
+      });
+      checkReq.on('error', (err) => {
+        log(`localhost:${port} is NOT reachable: ${err.message}`);
+        ws.send(JSON.stringify({ type: 'preview_error', message: `Nothing running on port ${port}` }));
+      });
+      checkReq.setTimeout(3000, () => {
+        checkReq.destroy();
+        log(`localhost:${port} timed out`);
+        ws.send(JSON.stringify({ type: 'preview_error', message: `Port ${port} timed out` }));
+      });
       break;
     }
 
     case 'stop_preview': {
-      stopPreviewTunnel();
+      previewPort = null;
+      log('Preview proxy disabled');
       ws.send(JSON.stringify({ type: 'preview_stopped' }));
       break;
     }
@@ -590,13 +573,12 @@ function cleanup() {
     tunnelProcess = null;
   }
 
-  if (previewTunnelProcess) {
-    previewTunnelProcess.kill();
-    previewTunnelProcess = null;
-  }
-
   if (wss) {
     wss.close();
+  }
+
+  if (httpServer) {
+    httpServer.close();
   }
 }
 

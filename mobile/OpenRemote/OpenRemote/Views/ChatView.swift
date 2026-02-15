@@ -42,8 +42,15 @@ struct ChatView: View {
                     if let urlString = connection.previewUrl,
                        let url = URL(string: urlString) {
                         UIApplication.shared.open(url)
-                        connection.stopPreview()
                     }
+                }
+                .alert("Preview Error", isPresented: Binding(
+                    get: { connection.previewError != nil },
+                    set: { if !$0 { connection.previewError = nil } }
+                )) {
+                    Button("OK") { connection.previewError = nil }
+                } message: {
+                    Text(connection.previewError ?? "")
                 }
                 .sheet(isPresented: $showPaywall) {
                     SupportPaywallView()
@@ -92,13 +99,23 @@ struct ChatView: View {
                         withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
                     }
                 }
+                .onChange(of: connection.currentActivity) {
+                    if let last = connection.messages.last, last.isStreaming {
+                        withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                    }
+                }
+                .onChange(of: connection.messages.last?.content) {
+                    if let last = connection.messages.last, last.isStreaming {
+                        withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                    }
+                }
                 .onChange(of: connection.showTrustPrompt) {
                     if connection.showTrustPrompt {
                         withAnimation { proxy.scrollTo("trust-prompt", anchor: .bottom) }
                     }
                 }
                 .onChange(of: inputFocused) {
-                    if inputFocused, let last = connection.messages.last {
+                    if let last = connection.messages.last {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                             withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
                         }
@@ -347,6 +364,15 @@ struct MessageRow: View {
                 Text(message.role == .user ? "You" : "Claude")
                     .font(.caption.bold())
                     .foregroundStyle(.secondary)
+                if message.isQueued {
+                    Text("queued")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.orange)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.orange.opacity(0.15))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                }
                 Spacer()
             }
 
