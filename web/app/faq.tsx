@@ -5,7 +5,7 @@ import { useState } from "react";
 const faqs = [
   {
     q: "What is OpenRemote?",
-    a: "OpenRemote lets you control Claude Code running on your Mac from your phone. Send prompts, see live tool activity, and preview dev servers — wirelessly.",
+    a: "OpenRemote lets you control Claude Code running on your Mac from your phone. Send prompts, see live tool activity, and preview dev servers wirelessly.",
   },
   {
     q: "Is it free?",
@@ -13,7 +13,7 @@ const faqs = [
   },
   {
     q: "How does the connection work?",
-    a: "The desktop app runs a local WebSocket server and creates a secure Cloudflare tunnel. Your phone connects through this tunnel — no port forwarding or network config needed.",
+    a: "The desktop app runs a local WebSocket server and creates a secure Cloudflare tunnel. Your phone connects through this tunnel. No port forwarding or network config needed.",
   },
   {
     q: "Do I need to install anything on my Mac?",
@@ -34,7 +34,7 @@ export default function FAQ() {
 
   return (
     <section className="max-w-2xl mx-auto px-6 py-24 w-full">
-      <p className="text-xs font-mono text-orange-500/60 tracking-wide uppercase text-center mb-3">
+      <p className="text-xs font-semibold text-orange-500/60 tracking-widest uppercase text-center mb-3">
         Questions
       </p>
       <h2 className="text-2xl sm:text-3xl font-bold tracking-[-0.02em] text-center mb-12">

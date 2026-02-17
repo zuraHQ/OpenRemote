@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var connection: ConnectionManager
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showScanner = false
     @State private var hasConnected = false
 
@@ -34,6 +35,11 @@ struct ContentView: View {
         .onAppear {
             if connection.state == .disconnected, let saved = ConnectionInfo.load() {
                 connection.connect(info: saved)
+            }
+        }
+        .onChange(of: scenePhase) {
+            if scenePhase == .active {
+                connection.handleAppForeground()
             }
         }
     }

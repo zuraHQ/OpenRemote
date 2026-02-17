@@ -13,13 +13,19 @@ class ConnectionManager: ObservableObject {
     @Published var previewUrl: String?
     @Published var isPreviewLoading: Bool = false
     @Published var previewError: String?
+    @Published var userRequestedPreview: Bool = false
     @Published var currentActivity: String = ""
     @Published var didExplicitlyDisconnect: Bool = false
 
     private var webSocket: URLSessionWebSocketTask?
     private var session: URLSession?
     private var token: String?
+    private var connectionInfo: ConnectionInfo?
     private var pingTimer: Timer?
+    private var reconnectAttempts: Int = 0
+    private let maxReconnectAttempts: Int = 5
+    private var reconnectTask: Task<Void, Never>?
+    private var isReconnecting: Bool = false
     private var outputBuffer: String = ""
     private var jsonLineBuffer: String = ""
     private var currentAssistantMessage: ChatMessage?
@@ -30,9 +36,15 @@ class ConnectionManager: ObservableObject {
     private var commandSentAt: Date = .distantPast
 
     func connect(info: ConnectionInfo) {
+        // Cancel any pending reconnect to prevent races
+        reconnectTask?.cancel()
+        reconnectTask = nil
+        isReconnecting = false
+
         disconnect(clearSaved: false)
         didExplicitlyDisconnect = false
         token = info.token
+        connectionInfo = info
         info.save()
 
         var wsUrl = info.url
@@ -191,6 +203,8 @@ class ConnectionManager: ObservableObject {
 
     func startPreview(port: Int = 3000) {
         isPreviewLoading = true
+        userRequestedPreview = true
+        previewUrl = nil  // Reset so .onChange fires even if same URL
         print("[OpenRemote] Sending start_preview for port \(port)")
         send(.startPreview(port: port))
 
@@ -234,10 +248,104 @@ class ConnectionManager: ObservableObject {
                 case .success:
                     self.listenForMessages()
                 case .failure(let error):
-                    if self.state != .disconnected {
-                        self.state = .failed(error.localizedDescription)
+                    if self.state != .disconnected && !self.didExplicitlyDisconnect {
+                        print("[OpenRemote] WebSocket receive failed: \(error.localizedDescription)")
+                        self.handleConnectionLost()
                     }
                 }
+            }
+        }
+    }
+
+    private func handleConnectionLost() {
+        guard !didExplicitlyDisconnect else { return }
+        guard state != .failed("Connection lost") || !isReconnecting else {
+            // Already handling a lost connection, don't stack up
+            return
+        }
+
+        // Clean up old socket without clearing saved connection
+        pingTimer?.invalidate()
+        pingTimer = nil
+        webSocket?.cancel(with: .goingAway, reason: nil)
+        webSocket = nil
+        session?.invalidateAndCancel()
+        session = nil
+        sessionId = nil
+
+        // Reset stuck chat state so UI doesn't stay on "Starting..."
+        if isWaitingForResponse {
+            print("[OpenRemote] Was waiting for response — resetting stuck state")
+            if let currentMsg = currentAssistantMessage,
+               let index = messages.firstIndex(where: { $0.id == currentMsg.id }) {
+                if messages[index].content.isEmpty {
+                    messages.remove(at: index)
+                } else {
+                    var updated = messages[index]
+                    updated.isStreaming = false
+                    updated.toolActivity = nil
+                    messages[index] = updated
+                }
+            }
+            isClaudeThinking = false
+            isWaitingForResponse = false
+            currentAssistantMessage = nil
+            currentActivity = ""
+            jsonLineBuffer = ""
+            claudeSessionId = nil
+        }
+
+        state = .failed("Connection lost")
+        attemptReconnect()
+    }
+
+    private func attemptReconnect() {
+        guard !isReconnecting else {
+            print("[OpenRemote] Reconnect already in flight, skipping")
+            return
+        }
+        guard reconnectAttempts < maxReconnectAttempts else {
+            print("[OpenRemote] Max reconnect attempts reached")
+            isReconnecting = false
+            return
+        }
+
+        guard let info = connectionInfo ?? ConnectionInfo.load() else {
+            print("[OpenRemote] No saved connection info for reconnect")
+            return
+        }
+
+        isReconnecting = true
+        reconnectAttempts += 1
+        let delay = min(Double(reconnectAttempts) * 1.0, 5.0)
+        print("[OpenRemote] Reconnecting in \(delay)s (attempt \(reconnectAttempts)/\(maxReconnectAttempts))")
+
+        reconnectTask?.cancel()
+        reconnectTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            guard self.state != .connected && !self.didExplicitlyDisconnect else {
+                self.isReconnecting = false
+                return
+            }
+            self.isReconnecting = false
+            self.connect(info: info)
+        }
+    }
+
+    /// Call this when the app returns to the foreground
+    func handleAppForeground() {
+        guard !didExplicitlyDisconnect else { return }
+
+        // Check if the WebSocket is still alive
+        if webSocket == nil || state == .failed("Connection lost") {
+            print("[OpenRemote] App foregrounded — reconnecting")
+            reconnectTask?.cancel()
+            reconnectTask = nil
+            isReconnecting = false
+            reconnectAttempts = 0
+            if let info = connectionInfo ?? ConnectionInfo.load() {
+                connect(info: info)
             }
         }
     }
@@ -246,6 +354,7 @@ class ConnectionManager: ObservableObject {
         switch msg {
         case .authOk:
             state = .connected
+            reconnectAttempts = 0
             createSession()
 
         case .sessionCreated(let sid):

@@ -39,8 +39,10 @@ struct ChatView: View {
                     Text("Enter the port your dev server is running on")
                 }
                 .onChange(of: connection.previewUrl) {
-                    if let urlString = connection.previewUrl,
+                    if connection.userRequestedPreview,
+                       let urlString = connection.previewUrl,
                        let url = URL(string: urlString) {
+                        connection.userRequestedPreview = false
                         UIApplication.shared.open(url)
                     }
                 }

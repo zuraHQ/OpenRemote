@@ -436,7 +436,7 @@
         clientCount++;
         updateStatus();
         addActivity('connect', 'Device connected and authenticated');
-      } else if (entry.message.includes('disconnected')) {
+      } else if (entry.message.includes('disconnected') && !entry.message.includes('unknown')) {
         clientCount = Math.max(0, clientCount - 1);
         updateStatus();
         addActivity('disconnect', 'Device disconnected');
