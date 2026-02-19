@@ -128,7 +128,6 @@ struct HomeView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    // MARK: - Step 2: Connect
 
     private var connectStep: some View {
         VStack(spacing: 32) {
@@ -146,7 +145,7 @@ struct HomeView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-            }
+            
 
             if case .failed(let msg) = connection.state {
                 Text(msg)
