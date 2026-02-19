@@ -47,13 +47,13 @@ export default function Home() {
           </span>
         </div>
 
-        <h1 className="hero-headlinetext-[clamp(2.5rem,8vw,7rem)] font-bold tracking-[-0.05em] leading-[0.9] mb-6">
+        <h1 className="hero-headline text-[clamp(2.5rem,8vw,7rem)] font-bold tracking-[-0.05em] leading-[0.9] mb-6">
           Claude Code
           <br />
           <span className="font-light tracking-[-0.03em] text-white/70">in your pocket</span>
         </h1>
 
-        <p className="hero-subtext-sm sm:text-base max-w-md mb-10 leading-relaxed">
+        <p className="hero-sub text-sm sm:text-base max-w-md mb-10 leading-relaxed">
           Send prompts, watch tool activity in real time, and preview
           dev servers. All from your couch.
         </p>
