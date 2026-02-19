@@ -1,0 +1,6 @@
+{
+  "name": "openremote-web",
+  "assets": {
+    "directory": "./out"
+  }
+}
