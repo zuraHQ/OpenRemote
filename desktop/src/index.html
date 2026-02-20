@@ -9,12 +9,52 @@
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-      background: linear-gradient(180deg, #0a0a0f 0%, #12121a 100%);
-      color: #e0e0e0;
+      background: rgba(22, 22, 24, 0.6);
+      color: #c8c8cc;
       height: 100vh;
       overflow: hidden;
       display: flex;
       flex-direction: column;
+    }
+
+    .navbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      -webkit-app-region: drag;
+    }
+    .navbar-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .navbar-logo {
+      width: 22px;
+      height: 22px;
+    }
+    .navbar-logo img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      border-radius: 4px;
+    }
+    .navbar-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: #f0f0f2;
+      letter-spacing: -0.2px;
+    }
+    .navbar-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      -webkit-app-region: no-drag;
+    }
+    .activity-label {
+      font-size: 11px;
+      color: #5a5a62;
     }
 
     .container {
@@ -30,32 +70,7 @@
       align-items: center;
       justify-content: center;
       padding: 40px;
-      gap: 24px;
-    }
-
-    .logo {
-      width: 72px;
-      height: 72px;
-    }
-    .logo img {
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-    }
-
-    .title {
-      text-align: center;
-    }
-    .title h1 {
-      font-size: 22px;
-      font-weight: 600;
-      color: #fff;
-      margin-bottom: 4px;
-      letter-spacing: -0.3px;
-    }
-    .title p {
-      font-size: 13px;
-      color: #666;
+      gap: 16px;
     }
 
     .qr-container {
@@ -63,124 +78,118 @@
     }
     .qr-section {
       text-align: center;
-      padding: 20px;
+      padding: 16px;
       background: rgba(255,255,255,0.03);
       border: 1px solid rgba(255,255,255,0.06);
       border-radius: 16px;
     }
     .qr-section img {
-      width: 180px;
-      height: 180px;
-      border-radius: 12px;
+      width: 160px;
+      height: 160px;
+      border-radius: 10px;
       background: #fff;
-      padding: 10px;
+      padding: 8px;
     }
     .qr-label {
-      font-size: 12px;
-      color: #555;
-      margin-top: 12px;
+      font-size: 11px;
+      color: #5a5a62;
+      margin-bottom: 10px;
     }
 
-    .security-badge {
+    .connected-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .connected-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: rgba(52,211,153,0.1);
+      color: #34d399;
       display: flex;
       align-items: center;
-      gap: 6px;
-      padding: 6px 12px;
-      background: rgba(0, 255, 136, 0.08);
-      border: 1px solid rgba(0, 255, 136, 0.15);
-      border-radius: 20px;
-      font-size: 11px;
-      color: #00ff88;
+      justify-content: center;
     }
-    .security-badge svg {
-      width: 12px;
-      height: 12px;
+    .connected-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #f0f0f2;
+    }
+    .connected-sub {
+      font-size: 12px;
+      color: #6e6e76;
     }
 
     .status-section {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
     }
 
     .status-bar {
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 8px 14px;
+      gap: 7px;
+      padding: 6px 12px;
+      border-radius: 20px;
       background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.06);
-      border-radius: 8px;
     }
     .status-dot {
-      width: 8px;
-      height: 8px;
+      width: 6px;
+      height: 6px;
       border-radius: 50%;
-      background: #333;
+      background: #3a3a40;
     }
-    .status-dot.active { background: #00ff88; box-shadow: 0 0 8px rgba(0,255,136,0.5); }
-    .status-dot.connecting { background: #ffaa00; animation: pulse 1s infinite; }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    .status-dot.active { background: #34d399; }
+    .status-dot.connecting { background: #f59e0b; animation: pulse 1.5s ease-in-out infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
     .status-text {
-      font-size: 12px;
-      color: #888;
+      font-size: 11px;
+      color: #6e6e76;
     }
 
     .connection-stats {
       display: flex;
-      gap: 16px;
+      gap: 14px;
       font-size: 11px;
     }
     .stat {
       display: flex;
       align-items: center;
       gap: 4px;
-      color: #555;
+      color: #5a5a62;
     }
     .stat-value {
-      color: #888;
-      font-family: 'SF Mono', monospace;
+      color: #8e8e96;
+      font-variant-numeric: tabular-nums;
     }
-    .stat-value.green { color: #00ff88; }
 
     .activity-panel {
-      width: 280px;
-      background: rgba(0,0,0,0.3);
-      border-left: 1px solid rgba(255,255,255,0.06);
+      width: 260px;
+      background: rgba(0,0,0,0.15);
+      border-left: 1px solid rgba(255,255,255,0.05);
       display: flex;
       flex-direction: column;
     }
-    .activity-header {
-      padding: 14px 16px;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .activity-title {
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: #555;
-    }
     .activity-count {
       font-size: 10px;
-      color: #444;
-      background: rgba(255,255,255,0.05);
-      padding: 2px 6px;
-      border-radius: 4px;
+      color: #4a4a52;
+      background: rgba(255,255,255,0.04);
+      padding: 2px 7px;
+      border-radius: 10px;
     }
     .activity-list {
       flex: 1;
       overflow-y: auto;
-      padding: 8px;
+      padding: 6px;
     }
     .activity-item {
-      padding: 8px 10px;
-      border-radius: 6px;
-      margin-bottom: 4px;
+      padding: 7px 10px;
+      border-radius: 8px;
+      margin-bottom: 2px;
       font-size: 11px;
       display: flex;
       align-items: flex-start;
@@ -190,9 +199,9 @@
       background: rgba(255,255,255,0.03);
     }
     .activity-icon {
-      width: 18px;
-      height: 18px;
-      border-radius: 4px;
+      width: 20px;
+      height: 20px;
+      border-radius: 6px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -200,124 +209,120 @@
       flex-shrink: 0;
       margin-top: 1px;
     }
-    .activity-icon.connect { background: rgba(0,255,136,0.15); color: #00ff88; }
-    .activity-icon.disconnect { background: rgba(255,68,68,0.15); color: #ff4444; }
-    .activity-icon.command { background: rgba(100,150,255,0.15); color: #6496ff; }
-    .activity-icon.system { background: rgba(255,170,0,0.15); color: #ffaa00; }
+    .activity-icon.connect { background: rgba(52,211,153,0.12); color: #34d399; }
+    .activity-icon.disconnect { background: rgba(248,113,113,0.12); color: #f87171; }
+    .activity-icon.command { background: rgba(129,140,248,0.12); color: #818cf8; }
+    .activity-icon.system { background: rgba(251,191,36,0.12); color: #fbbf24; }
     .activity-content {
       flex: 1;
       min-width: 0;
     }
     .activity-text {
-      color: #888;
+      color: #8e8e96;
       line-height: 1.4;
       word-break: break-word;
     }
     .activity-time {
       font-size: 10px;
-      color: #444;
+      color: #4a4a52;
       margin-top: 2px;
     }
     .activity-empty {
       text-align: center;
       padding: 40px 20px;
-      color: #444;
+      color: #4a4a52;
       font-size: 12px;
     }
 
     .footer {
-      padding: 12px 20px;
-      border-top: 1px solid rgba(255,255,255,0.06);
+      padding: 8px 16px;
+      border-top: 1px solid rgba(255,255,255,0.05);
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      background: rgba(0,0,0,0.2);
+      justify-content: space-between;
     }
     .footer-left {
       display: flex;
       align-items: center;
       gap: 12px;
     }
+    .footer-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
     .version {
       font-size: 10px;
-      color: #444;
-    }
-    .footer-links {
-      display: flex;
-      gap: 12px;
+      color: #3a3a42;
     }
     .footer-link {
       font-size: 10px;
-      color: #555;
+      color: #4a4a52;
       text-decoration: none;
       cursor: pointer;
       transition: color 0.15s;
     }
-    .footer-link:hover { color: #888; }
-
-    .btn-group {
-      display: flex;
-      gap: 8px;
-    }
+    .footer-link:hover { color: #8e8e96; }
     .btn {
       background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.08);
-      color: #777;
-      padding: 6px 12px;
-      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.07);
+      color: #6e6e76;
+      padding: 5px 11px;
+      border-radius: 8px;
       font-size: 11px;
       cursor: pointer;
       transition: all 0.15s;
     }
     .btn:hover {
       background: rgba(255,255,255,0.08);
-      color: #fff;
-      border-color: rgba(255,255,255,0.12);
+      color: #c8c8cc;
+      border-color: rgba(255,255,255,0.1);
     }
   </style>
 </head>
 <body>
+  <div class="navbar">
+    <div class="navbar-left">
+      <div class="navbar-logo"><img src="assets/trasnprtnt-logo.png" alt="OpenRemote" /></div>
+      <span class="navbar-name">OpenRemote</span>
+    </div>
+    <div class="navbar-right">
+      <span class="activity-label">Activity</span>
+      <span class="activity-count" id="activityCount">0</span>
+    </div>
+  </div>
+
   <div class="container">
     <div class="main-panel">
-      <div class="logo"><img src="assets/Vector.png" alt="OpenRemote" /></div>
-
-      <div class="title">
-        <h1>OpenRemote</h1>
-        <p>Secure remote control for Claude CLI</p>
-      </div>
-
-      <div class="qr-container">
-        <div class="qr-section">
-          <img id="qrCode" alt="QR Code" />
-          <div class="qr-label">Scan with OpenRemote iOS app</div>
+      <div id="viewQR">
+        <div class="qr-container">
+          <div class="qr-section">
+            <img id="qrCode" alt="QR Code" />
+          </div>
+        </div>
+        <div class="status-section" style="margin-top: 12px;">
+          <div class="status-bar">
+            <span class="status-dot connecting" id="statusDot"></span>
+            <span class="status-text" id="statusText">Connecting...</span>
+          </div>
         </div>
       </div>
 
-      <div class="security-badge">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-          <path d="M9 12l2 2 4-4"/>
-        </svg>
-        <span>End-to-end encrypted via Cloudflare Tunnel</span>
-      </div>
-
-      <div class="status-section">
-        <div class="status-bar">
-          <span class="status-dot connecting" id="statusDot"></span>
-          <span class="status-text" id="statusText">Establishing secure tunnel...</span>
-        </div>
-        <div class="connection-stats" id="connectionStats" style="display: none;">
-          <div class="stat">Devices: <span class="stat-value green" id="clientCount">0</span></div>
-          <div class="stat">Sessions: <span class="stat-value" id="sessionCount">0</span></div>
+      <div id="viewConnected" style="display: none;">
+        <div class="connected-state">
+          <div class="connected-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+              <polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+          </div>
+          <div class="connected-title">Connected</div>
+          <div class="connected-sub"><span id="connectedDevices">1</span> device · <span id="connectedSessions">0</span> sessions</div>
         </div>
       </div>
     </div>
 
     <div class="activity-panel">
-      <div class="activity-header">
-        <span class="activity-title">Activity</span>
-        <span class="activity-count" id="activityCount">0 events</span>
-      </div>
       <div class="activity-list" id="activityList">
         <div class="activity-empty">No activity yet</div>
       </div>
@@ -326,10 +331,10 @@
 
   <div class="footer">
     <div class="footer-left">
-      <span class="version">OpenRemote v1.0.0</span>
-      <span class="footer-link" id="tunnelInfo">Tunnel: connecting...</span>
+      <span class="version">v1.0.0</span>
+      <span class="footer-link" id="tunnelInfo">Starting up...</span>
     </div>
-    <div class="btn-group">
+    <div class="footer-right">
       <button class="btn" id="btnCopyUrl">Copy URL</button>
       <button class="btn" id="btnRegenToken">Reset Pairing</button>
     </div>
@@ -344,25 +349,27 @@
     let activityCount = 0;
 
     function updateStatus() {
-      if (tunnelUrl) {
-        $('#statusDot').className = 'status-dot active';
-        $('#tunnelInfo').textContent = 'Tunnel: secure';
-        $('#tunnelInfo').style.color = '#00ff88';
-        if (clientCount > 0) {
-          $('#statusText').textContent = `Secure connection active`;
-          $('#connectionStats').style.display = 'flex';
-          $('#clientCount').textContent = clientCount;
-          $('#sessionCount').textContent = sessionCount;
-        } else {
-          $('#statusText').textContent = 'Ready for secure connection';
-          $('#connectionStats').style.display = 'none';
-        }
+      if (tunnelUrl && clientCount > 0) {
+        $('#viewQR').style.display = 'none';
+        $('#viewConnected').style.display = '';
+        $('#connectedDevices').textContent = clientCount;
+        $('#connectedSessions').textContent = sessionCount;
+        $('#tunnelInfo').textContent = 'Connected';
+        $('#tunnelInfo').style.color = '#34d399';
       } else {
-        $('#statusDot').className = 'status-dot connecting';
-        $('#statusText').textContent = 'Establishing secure tunnel...';
-        $('#tunnelInfo').textContent = 'Tunnel: connecting...';
-        $('#tunnelInfo').style.color = '#ffaa00';
-        $('#connectionStats').style.display = 'none';
+        $('#viewQR').style.display = '';
+        $('#viewConnected').style.display = 'none';
+        if (tunnelUrl) {
+          $('#statusDot').className = 'status-dot active';
+          $('#statusText').textContent = 'Ready — scan to connect';
+          $('#tunnelInfo').textContent = 'Ready';
+          $('#tunnelInfo').style.color = '#34d399';
+        } else {
+          $('#statusDot').className = 'status-dot connecting';
+          $('#statusText').textContent = 'Connecting...';
+          $('#tunnelInfo').textContent = 'Starting up...';
+          $('#tunnelInfo').style.color = '#f59e0b';
+        }
       }
     }
 
@@ -390,7 +397,7 @@
       list.insertBefore(item, list.firstChild);
 
       activityCount++;
-      $('#activityCount').textContent = `${activityCount} event${activityCount !== 1 ? 's' : ''}`;
+      $('#activityCount').textContent = activityCount;
 
       while (list.children.length > 50) {
         list.removeChild(list.lastChild);
@@ -411,7 +418,7 @@
       updateStatus();
 
       if (tunnelUrl) {
-        addActivity('system', 'Secure tunnel established');
+        addActivity('system', 'Ready');
       }
 
       const qr = await window.clawRemote.getQRCode();
@@ -421,7 +428,7 @@
     window.clawRemote.onTunnelUrl(async (url) => {
       tunnelUrl = url;
       updateStatus();
-      addActivity('system', 'Cloudflare tunnel connected');
+      addActivity('system', 'Ready for pairing');
       const qr = await window.clawRemote.getQRCode();
       if (qr) $('#qrCode').src = qr;
     });
@@ -435,15 +442,15 @@
       if (entry.message.includes('authenticated')) {
         clientCount++;
         updateStatus();
-        addActivity('connect', 'Device connected and authenticated');
+        addActivity('connect', 'Device connected');
       } else if (entry.message.includes('disconnected') && !entry.message.includes('unknown')) {
         clientCount = Math.max(0, clientCount - 1);
         updateStatus();
         addActivity('disconnect', 'Device disconnected');
       } else if (entry.message.includes('Session created')) {
-        addActivity('command', 'New terminal session started');
+        addActivity('command', 'Session started');
       } else if (entry.message.includes('Session') && entry.message.includes('exited')) {
-        addActivity('command', 'Terminal session ended');
+        addActivity('command', 'Session ended');
       }
     });
 
@@ -463,7 +470,7 @@
         if (qr) $('#qrCode').src = qr;
         clientCount = 0;
         updateStatus();
-        addActivity('system', 'Pairing code regenerated');
+        addActivity('system', 'Pairing reset');
       }
     });
 

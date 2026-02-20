@@ -502,6 +502,10 @@ function showDashboard() {
     resizable: true,
     frame: true,
     title: 'OpenRemote',
+    vibrancy: 'fullscreen-ui',
+    visualEffectState: 'active',
+    backgroundColor: '#00000000',
+    transparent: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
